@@ -42,9 +42,10 @@ from copy import deepcopy
 from datetime import datetime
 
 import numpy as np
+from pyproj import Geod
 
-import mpop.imageo.formats.writer_options as write_opts
-from mpop.imageo.formats import tifffile
+#import mpop.imageo.formats.writer_options as write_opts
+from pyninjotiff import tifffile
 
 log = logging.getLogger(__name__)
 
@@ -248,8 +249,9 @@ def _get_pixel_size(projection_name, area_def):
         pixel_size = abs(lower_right[0] - upper_left[0]) / (area_def.shape[1] - 1),\
             abs(upper_left[1] - lower_right[1]) / (area_def.shape[0] - 1)
     elif projection_name in ('NPOL', 'SPOL'):
-        pixel_size = (np.rad2deg(area_def.pixel_size_x / float(area_def.proj_dict['a'])),
-                      np.rad2deg(area_def.pixel_size_y / float(area_def.proj_dict['b'])))
+        geod = Geod(**area_def.proj_dict)
+        pixel_size = (np.rad2deg(area_def.pixel_size_x / float(geod.a)),
+                      np.rad2deg(area_def.pixel_size_y / float(geod.b)))
     else:
         raise ValueError("Could determine pixel size from projection name '%s'" %
                          projection_name + " (Unknown)")
@@ -269,12 +271,12 @@ def _get_satellite_altitude(filename):
     return None
 
 
-def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True):
+def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True):
     """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
     and offset.
 
     :Parameters:
-        geo_image : mpop.imageo.geo_image.GeoImage
+        img : mpop.imageo.img.GeoImage
             See MPOP's documentation.
         dtype : bits per sample np.uint8 or np.uint16 (default: np.uint8)
         value_range_measurement_unit: list or tuple
@@ -297,9 +299,9 @@ def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data
         physic_val = image*scale + offset
         Example values for value_range_measurement_unit are (0, 125) or (40.0, -87.5)
     """
-    if geo_image.mode == 'L':
+    if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        data = geo_image.channels[0]
+        data = img.channels[0]
         fill_value = np.iinfo(dtype).min
         log.debug("Transparent pixel are forced to be %d" % fill_value)
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
@@ -319,12 +321,12 @@ def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data
                 # Make room for transparent pixel.
                 scale_fill_value = (
                     (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
-                geo_image = deepcopy(geo_image)
-                geo_image.channels[0] *= scale_fill_value
+                img = deepcopy(img)
+                img.channels[0] *= scale_fill_value
 
-                geo_image.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
+                img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
 
-                channels, fill_value = geo_image._finalize(dtype)
+                channels, fill_value = img._finalize(dtype)
                 data = channels[0]
 
                 scale = ((value_range_measurement_unit[1] -
@@ -384,8 +386,8 @@ def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data
 
         return data, scale, offset, fill_value
 
-    elif geo_image.mode == 'RGB':
-        channels, fill_value = geo_image._finalize(dtype)
+    elif img.mode == 'RGB':
+        channels, fill_value = img._finalize(dtype)
         if fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
@@ -398,8 +400,8 @@ def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data
                           for channel, fill_v in zip(channels, fill_value)])
         return data, 1.0, 0.0, fill_value[0]
 
-    elif geo_image.mode == 'RGBA':
-        channels, fill_value = geo_image._finalize(dtype)
+    elif img.mode == 'RGBA':
+        channels, fill_value = img._finalize(dtype)
         fill_value = fill_value or (0, 0, 0, 0)
         data = np.dstack((channels[0].filled(fill_value[0]),
                           channels[1].filled(fill_value[1]),
@@ -407,9 +409,9 @@ def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data
                           channels[3].filled(fill_value[3])))
         return data, 1.0, 0.0, fill_value[0]
 
-    elif geo_image.mode == 'P':
+    elif img.mode == 'P':
         fill_value = 0
-        data = geo_image.channels[0]
+        data = img.channels[0]
         if isinstance(data, np.ma.core.MaskedArray):
             data = data.filled(fill_value)
         data = data.astype(dtype)
@@ -419,16 +421,17 @@ def _finalize(geo_image, dtype=np.uint8, value_range_measurement_unit=None, data
 
     else:
         raise ValueError("Don't known how til handle image mode '%s'" %
-                         str(geo_image.mode))
+                         str(img.mode))
 
 
-def save(geo_image, filename, ninjo_product_name=None, writer_options=None,
+def save(img, filename, ninjo_product_name=None, writer_options=None,
          **kwargs):
-    """MPOP's interface to Ninjo TIFF writer.
+    """Ninjo TIFF writer.
 
     :Parameters:
-        geo_image : mpop.imageo.geo_image.GeoImage
-            See MPOP's documentation.
+        img : Trollimage Image instance
+        geodef: A pyresample AreaDefinition
+            Ninjo support only stere, merc and eqc for now
         filename : str
             The name of the TIFF file to be created
     :Keywords:
@@ -468,13 +471,13 @@ def save(geo_image, filename, ninjo_product_name=None, writer_options=None,
 
     data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
-    data, scale, offset, fill_value = _finalize(geo_image,
+    data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
                                                 value_range_measurement_unit=value_range_measurement_unit,)
 
-    area_def = geo_image.area
-    time_slot = geo_image.time_slot
+    area_def = img.info['area']
+    time_slot = img.info['start_time']
 
     # Some Ninjo tiff names
     kwargs['gradient'] = scale
@@ -482,8 +485,8 @@ def save(geo_image, filename, ninjo_product_name=None, writer_options=None,
     kwargs['transparent_pix'] = fill_value
     kwargs['image_dt'] = time_slot
     kwargs['is_calibrated'] = True
-    if geo_image.mode == 'P' and 'cmap' not in kwargs:
-        r, g, b = zip(*geo_image.palette)
+    if img.mode == 'P' and 'cmap' not in kwargs:
+        r, g, b = zip(*img.palette)
         r = list((np.array(r) * 255).astype(np.uint8))
         g = list((np.array(g) * 255).astype(np.uint8))
         b = list((np.array(b) * 255).astype(np.uint8))
@@ -580,10 +583,9 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
             options['ref_lat2'] = 0
     if 'lon_0' in area_def.proj_dict:
         options['central_meridian'] = area_def.proj_dict['lon_0']
-    if 'a' in area_def.proj_dict:
-        options['radius_a'] = area_def.proj_dict['a']
-    if 'b' in area_def.proj_dict:
-        options['radius_b'] = area_def.proj_dict['b']
+    geod = Geod(**area_def.proj_dict)
+    options['radius_a'] = geod.a
+    options['radius_b'] = geod.b
     options['origin_lon'] = upper_left[0]
     options['origin_lat'] = upper_left[1]
     options['min_gray_val'] = image_data.min()
