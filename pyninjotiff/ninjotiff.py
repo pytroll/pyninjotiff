@@ -247,10 +247,10 @@ def _get_projection_name(area_def):
 def _get_pixel_size(projection_name, area_def):
     		 
     if projection_name in ['PLAT', 'MERC',]:	
-      proj  = Proj(area_def.proj_dict)  			 
-      upper_left  = proj(area_def.area_extent[0], area_def.area_extent[3], inverse = True)
-      lower_right = proj(area_def.area_extent[2], area_def.area_extent[1], inverse = True)			 
-      pixel_size = abs(lower_right[0] - upper_left[0]) / area_def.shape[1] ,\
+        proj  = Proj(area_def.proj_dict)  			 
+        upper_left  = proj(area_def.area_extent[0], area_def.area_extent[3], inverse = True)
+        lower_right = proj(area_def.area_extent[2], area_def.area_extent[1], inverse = True)			 
+        pixel_size = abs(lower_right[0] - upper_left[0]) / area_def.shape[1] ,\
                    abs(upper_left[1] - lower_right[1]) / area_def.shape[0]
 		   
     elif projection_name in ('NPOL', 'SPOL',):
