@@ -243,23 +243,28 @@ def _get_projection_name(area_def):
     return None
 
 
-
 def _get_pixel_size(projection_name, area_def):
-    		 
-    if projection_name in ['PLAT', 'MERC',]:	
-        proj  = Proj(area_def.proj_dict)  			 
-        upper_left  = proj(area_def.area_extent[0], area_def.area_extent[3], inverse = True)
-        lower_right = proj(area_def.area_extent[2], area_def.area_extent[1], inverse = True)			 
-        pixel_size = abs(lower_right[0] - upper_left[0]) / area_def.shape[1] ,\
-                   abs(upper_left[1] - lower_right[1]) / area_def.shape[0]
-		   
+    if projection_name in ['PLAT', 'MERC', ]:
+        proj = Proj(area_def.proj_dict)
+        upper_left = proj(
+            area_def.area_extent[0],
+            area_def.area_extent[3],
+            inverse=True)
+        lower_right = proj(
+            area_def.area_extent[2],
+            area_def.area_extent[1],
+            inverse=True)
+        pixel_size = abs(lower_right[0] - upper_left[0]) / area_def.shape[1],\
+            abs(upper_left[1] - lower_right[1]) / area_def.shape[0]
+
     elif projection_name in ('NPOL', 'SPOL',):
-	a,b = proj4_radius_parameters(area_def.proj_dict)
+        a, b = proj4_radius_parameters(area_def.proj_dict)
         pixel_size = (np.rad2deg(area_def.pixel_size_x / a),
                       np.rad2deg(area_def.pixel_size_y / b))
     else:
-        raise ValueError("Could not determine pixel size from projection name '%s'" %
-                         projection_name + " (Unknown)")		   		 
+        raise ValueError(
+            "Could not determine pixel size from projection name '%s'" %
+            projection_name + " (Unknown)")
     return pixel_size
 
 
@@ -529,9 +534,14 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     
 
     proj  = Proj(area_def.proj_dict) 
-    upper_left  = proj(area_def.area_extent[0], area_def.area_extent[3], inverse = True)
-    lower_right = proj(area_def.area_extent[2], area_def.area_extent[1], inverse = True)
-    
+    upper_left = proj(
+        area_def.area_extent[0],
+        area_def.area_extent[3],
+        inverse=True)
+    lower_right = proj(
+        area_def.area_extent[2],
+        area_def.area_extent[1],
+        inverse=True)    
  
     if len(image_data.shape) == 3:
         if image_data.shape[2] == 4:
