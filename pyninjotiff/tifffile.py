@@ -711,8 +711,8 @@ class TiffWriter(object):
                     # reset and use compress sizes
                     strip_byte_counts = []
                 for plane in data[pageindex]:
-                    for ty in xrange(0, tiles_y):
-                        for tx in xrange(0, tiles_x):
+                    for ty in range(0, tiles_y):
+                        for tx in range(0, tiles_x):
                             # allocate fixed size tile filled with zeros
                             tile = numpy.zeros((tile_width * tile_length,
                                                 shape[-1]), data.dtype)
@@ -724,7 +724,7 @@ class TiffWriter(object):
                             itw = min(tile_width,
                                       shape[3] - tx*tile_width)
                             ioffs = tx*tile_width
-                            for tl in xrange(0, itl):
+                            for tl in range(0, itl):
                                 # copy data to tile line
                                 ir = ty*tile_length+tl
                                 tile[tl*tile_width:tl*tile_width+itw] \
