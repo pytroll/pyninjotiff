@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+
+########
+#### SO FAR ONLY FOOLED AROUND WITH 
+  #  "L" GREYSCALE WITH SET_LIMITS (min/max passed into routine)
+  #  
+######
+
 """
 ninjotiff.py
 
@@ -42,6 +49,9 @@ from copy import deepcopy
 from datetime import datetime
 
 import numpy as np
+##import numpy.ma as ma
+import xarray as xr
+from trollimage.xrimage import XRImage
 
 from pyproj import Proj
 from pyresample.utils import proj4_radius_parameters
@@ -235,7 +245,9 @@ def _get_projection_name(area_def):
     elif proj_name in ('merc',):
         return 'MERC'
     elif proj_name in ('stere',):
-        lat_0 = area_def.proj_dict['lat_0']
+        # GOODSON >>> ADDED THE float () .. since it was complainng lat_0 
+        # was a string in the comparison???  Started with python 3.
+        lat_0 = float (area_def.proj_dict['lat_0'])
         if lat_0 < 0:
             return 'SPOL'
         else:
@@ -286,8 +298,13 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
     and offset.
 
     :Parameters:
+    
+    
         img : mpop.imageo.img.GeoImage
             See MPOP's documentation.
+	    
+	img : GOODSON 2018/03/27 - now XRImage  
+	    
         dtype : bits per sample np.uint8 or np.uint16 (default: np.uint8)
         value_range_measurement_unit: list or tuple
             Defining minimum and maximum value range. Data will be clipped into
@@ -309,10 +326,39 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         physic_val = image*scale + offset
         Example values for value_range_measurement_unit are (0, 125) or (40.0, -87.5)
     """
+    
+    ###### GOODSON -  2008/03/27 - Change for xarray
+
+    
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        data = img.channels[0]
+	
+	
+	###### GOODSON -  2008/03/27 - Change for xarray
+    
+    # Note - 20180606 -- well .. know that I've learned the below, I should
+    # probably go through and redo-things making sure I've used data/values
+    # properly.  But .. if you see this note .. I haven't done that yet.
+    # The new info is:
+    
+
+    #  from d. hoese slack  June 06, 7:21
+    #     data_arr = scn['dataset'] returns a DataArray (the data structure from xarry library)
+    #     data_arr.data is the dask array (he doesn't say it .. but I believe these can't be modified)
+    #     data_arr.values COMPUTES the data and returns a numpy array (which you could fiddle with
+    #     data_arr.compute() retuns a DataArray but with a numpy array within .. instead of a dask array.
+    
+    
+    
+    
+    
+	# We'll do manipulations on img.data.  
+		
+        # data = img.channels[0]	
+        data = img.data
+	
         fill_value = np.iinfo(dtype).min
+
         log.debug("Transparent pixel are forced to be %d" % fill_value)
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
@@ -323,30 +369,73 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
             offset = 0
         else:
             if value_range_measurement_unit and data_is_scaled_01:
+	    
+	    
+                print ("GOODSON - VALUE RANGE AND SCALED" , value_range_measurement_unit, np.iinfo(dtype).max)
+		
+
                 # No additional scaling of the input data - assume that data is
                 # within [0.0, 1.0] and interpret 0.0 as
                 # value_range_measurement_unit[0] and 1.0 as
                 # value_range_measurement_unit[1]
 
                 # Make room for transparent pixel.
+		
+		
                 scale_fill_value = (
                     (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
-                img = deepcopy(img)
-                img.channels[0] *= scale_fill_value
-
-                img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
-
-                channels, fill_value = img._finalize(dtype)
-                data = channels[0]
-
+		    
+		 
+		 
+		###### GOODSON -  2008/03/27 - Change for xarray
+		# I'm told that dask array's don't support in-place operations
+		# but get reassigned.  Lets try .... 
+		
+		# NOTE>> the following doesn't throw any errors .. but
+		# it is EQUALLY POSSIBLE that it is not actually doing
+		# anything.  NEED MORE TESTING.  not sure how/when
+		# operational actually occur on dask data.   
+		    
+                ####img = deepcopy(img)
+		####img.data[0].values *= scale_fill_value
+                
+		####img.data[0].values += 1 / (np.iinfo(dtype).max + 1.0)
+                data[0].values *= scale_fill_value
+                data[0].values += 1 / (np.iinfo(dtype).max + 1.0)
+		
+		
+                ###### GOODSON -  2008/03/27 - Change for xarray
+		
+		# Not sure I absolutely need a new image at this point
+		# which would waste memory.  But .. whatever .. lets do it.
+		
+		
+		
+                img.data = data
+		
+		
+                channels, band_value = img._finalize(fill_value, dtype)
+		
+		# GOODSON >> using [0] here so that the bands get dropped
+		# shape = (width,height) instead of (1, width, height) so
+		# that tifffile.py is happy
+		
+                data = channels[0].values
+		
+	        ## GOODSON >> Added minus 1 to denominator
+	        
                 scale = ((value_range_measurement_unit[1] -
                           value_range_measurement_unit[0]) /
-                         (np.iinfo(dtype).max))
+                         (np.iinfo(dtype).max - 1))
                 # Handle the case where all data has the same value.
                 scale = scale or 1
                 offset = value_range_measurement_unit[0]
 
-                mask = data.mask
+                
+		# GOODSON -> Where is this being used ?????
+		#  .. and doesn't exist for xarray anyway...
+		##mask = data.mask
+
 
                 offset -= scale
 
@@ -380,7 +469,9 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
                 data = 1 + ((data.data - offset) / scale).astype(dtype)
                 offset -= scale
 
-            data[mask] = fill_value
+            ## GOODSON >> where is this being used?
+	    ##  and doesn't exist for xarray anyway..	    
+	    ##data[mask] = fill_value
 
             if log.getEffectiveLevel() == logging.DEBUG:
                 d__ = np.ma.array(data, mask=(data == fill_value))
@@ -396,27 +487,110 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
 
         return data, scale, offset, fill_value
 
-    elif img.mode == 'RGB':
-        channels, fill_value = img._finalize(dtype)
-        if fill_value is None:
-            mask = (np.ma.getmaskarray(channels[0]) &
-                    np.ma.getmaskarray(channels[1]) &
-                    np.ma.getmaskarray(channels[2]))
-            channels.append((np.ma.logical_not(mask) *
-                             np.iinfo(channels[0].dtype).max).astype(channels[0].dtype))
-            fill_value = (0, 0, 0, 0)
+   
+    ###### GOODSON -  2008/03/27 - Change for xarray
+    # change call to img._finalize to include fill_value (= none)
+    # change return to img._finalize such that holds "bands" not fill_value
+    
+    # fill_value -> 0 ...    will come back from finalize as RGB
+    # fill_value -> none ... will come back from finalize as RGBA
+    
+    # Will generally want RGBA so have faked-it below to convert
+    # incoming RGB image to RGBA.  Unpleasant but OK for now.
+   
+   
+    #### DOING THIS to force RGBA .. just for testing !
+    elif img.mode == 'RGBXXX':
+    #######elif img.mode == 'RGB':
+    
+        print ("INSIDE RGB")
+        #channels, fill_value = img._finalize(None, dtype)
+	
+	# fill = 0 means it will come back from finalize as RGB
+	# with 0 in no-data areas
+	
+        fill_value = 0
+        channels, bands = img._finalize(fill_value, dtype)
+	
+        print ("bands are" , bands)
+        print ("channels are ")
+        print (channels.values)
+	
+	
+        #if fill_value is None:
+        #    mask = (np.ma.getmaskarray(channels[0]) &
+        #            np.ma.getmaskarray(channels[1]) &
+        #            np.ma.getmaskarray(channels[2]))
+        #    channels.append((np.ma.logical_not(mask) *
+        #                     np.iinfo(channels[0].dtype).max).astype(channels[0].dtype))
+        #    fill_value = (0, 0, 0, 0)
 
-        data = np.dstack([channel.filled(fill_v)
-                          for channel, fill_v in zip(channels, fill_value)])
-        return data, 1.0, 0.0, fill_value[0]
+        
+	
+	#data = np.dstack([channel.filled(fill_v)
+        #                  for channel, fill_v in zip(channels, fill_value)])
+			  
+	# as for "L" .. channels[0] not channels to remove the bands from the shape		  
+	
+	
+        data = np.dstack((channels[0].values,
+                          channels[1].values,
+                          channels[2].values))
+	
+	
+	
+			  
+        # return data, 1.0, 0.0, fill_value[0]
+	
 
-    elif img.mode == 'RGBA':
-        channels, fill_value = img._finalize(dtype)
+	
+	
+        return data, 1.0, 0.0, fill_value
+	
+    # GOODSON >>> DOING THIS .. just to force RGBA .. just for testing.
+   
+    ######elif img.mode == 'RGBA':
+    elif img.mode == 'RGB' or img.mode == 'RGBA':
+    
+        print ("INSIDE RGBA with ", img.mode)
+	
+	#channels, fill_value = img._finalize(dtype)
+	
+        # fill = none means it will come back from finalize as RGBA
+	# and be transparent in no-data areas
+	
+       
+        # Should be for RGB fill_value = 0 and for RGBA fill_vale = None
+        # But, for ninjo .. I always want None cause ninjo won't map
+        # rgb = 0,0,0 as transparent.  Soooo .. for now .. cheating
+        # until I can figure out what to do ..
+       
+        if img.mode == "RGB":
+          ##fill_value = 0
+          fill_value = None
+        else:
+          fill_value = None
+        
+        
+        
+        #channels, fill_value = img._finalize(fill_value,dtype)
+        channels, bands = img._finalize(fill_value,dtype)
+		
+	
         fill_value = fill_value or (0, 0, 0, 0)
-        data = np.dstack((channels[0].filled(fill_value[0]),
-                          channels[1].filled(fill_value[1]),
-                          channels[2].filled(fill_value[2]),
-                          channels[3].filled(fill_value[3])))
+        #data = np.dstack((channels[0].filled(fill_value[0]),
+        #                  channels[1].filled(fill_value[1]),
+        #                  channels[2].filled(fill_value[2]),
+        #                  channels[3].filled(fill_value[3])))
+       
+        
+        data = np.dstack((channels[0].values,
+                          channels[1].values,
+                          channels[2].values,
+                          channels[3].values))	
+	
+	##data = channels.values
+	
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'P':
@@ -430,7 +604,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, 1.0, 0.0, fill_value
 
     else:
-        raise ValueError("Don't known how til handle image mode '%s'" %
+        raise ValueError("Don't known how to handle image mode '%s'" %
                          str(img.mode))
 
 
@@ -480,14 +654,26 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
         value_range_measurement_unit = None
 
     data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
+    
+    
+    ###### GOODSON -  2008/03/27 - Change for xarray
+    
+    # Various changes within _finalize.
+    # AS OF THIS WRITING >> ONLY "L" images changed
+    
 
     data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
                                                 value_range_measurement_unit=value_range_measurement_unit,)
 
-    area_def = img.info['area']
-    time_slot = img.info['start_time']
+    ###### GOODSON -  2008/03/27 - Change for xarray
+    
+    # area_def = img.info['area']
+    # time_slot = img.info['start_time']
+    
+    area_def = img.data.area
+    time_slot = img.data.start_time
 
     # Some Ninjo tiff names
     kwargs['gradient'] = scale
@@ -543,6 +729,25 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         area_def.area_extent[1],
         inverse=True)    
  
+    
+    ###### GOODSON -  2008/03/27 - Change for xarray/XRImage
+    # ok .. just guessing here.
+    # For RGB .. xarray is bands,x,y
+    # Code below is x,y,bands
+    # SOOOOO .. going to reverse the code below
+    #
+    # It seems to be OK for "L" .. but not sure why
+    # because should have same problem.
+    #
+    # Not tested for "LA"
+
+    # Ahhhh....
+    # What are the chances they are not the same shape??
+    # For now ..  don't do the shape-check.  Just to see if it works.
+    # the shape-check.  Just to see if it works.
+    #
+    # note that len(image_data always 3 now .. so ...
+    
     if len(image_data.shape) == 3:
         if image_data.shape[2] == 4:
             shape = (area_def.y_size, area_def.x_size, 4)
@@ -555,11 +760,33 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         shape = (area_def.y_size, area_def.x_size)
         write_rgb = False
         log.info("Will generate single band product")
+ 
+    
+    #if image_data.shape[0] == 4:
+    #    shape = (area_def.y_size, area_def.x_size, 4)
+    #    log.info("Will generate RGBA product")
+#	write_rgb = True
+    #elif image_data.shape[0] == 3:
+    #    shape = (area_def.y_size, area_def.x_size, 3)
+    #    log.info("Will generate RGB product")
+    #    write_rgb = True
+    #else:
+    #    shape = (area_def.y_size, area_def.x_size,1)
+    #    write_rgb = False
+    #    log.info("Will generate single band product")
 
-    if image_data.shape != shape:
-        raise ValueError("Raster shape %s does not correspond to expected shape %s" % (
-            str(image_data.shape), str(shape)))
+   
+    print ("shape, VALUE OF write_rgb is ", image_data.shape[0], write_rgb)
+   
+   
+    #NOT CHECKING SHAPE .. for now..
+    
+    #if image_data.shape != shape:
+    #    raise ValueError("Raster shape %s does not correspond to expected shape %s" % (
+    #        str(image_data.shape), str(shape)))
 
+   
+   
     # Ninjo's physical units and value.
     # If just a physical unit (e.g. 'C') is passed, it will then be
     # translated into Ninjo's unit and value (e.q 'CELCIUS' and 'T').
@@ -612,6 +839,7 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     options['max_gray_val'] = image_data.max()
     options.update(kwargs)  # Update/overwrite with passed arguments
 
+   
     _write(image_data, output_fn, write_rgb=write_rgb, **options)
 
 
@@ -769,7 +997,6 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     origin_lat = float(kwargs.pop("origin_lat"))
     origin_lon = float(kwargs.pop("origin_lon"))
     image_dt = kwargs.pop("image_dt")
-    zero_seconds = kwargs.pop("zero_seconds", False)
     projection = str(kwargs.pop("projection"))
     meridian_west = float(kwargs.pop("meridian_west", 0.0))
     meridian_east = float(kwargs.pop("meridian_east", 0.0))
@@ -843,13 +1070,7 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
 
     file_dt = datetime.utcnow()
     file_epoch = calendar.timegm(file_dt.timetuple())
-    if zero_seconds:
-        log.debug("Applying zero seconds correction")
-        image_dt_corr = datetime(image_dt.year, image_dt.month, image_dt.day,
-                                 image_dt.hour, image_dt.minute)
-    else:
-        image_dt_corr = image_dt
-    image_epoch = calendar.timegm(image_dt_corr.timetuple())
+    image_epoch = calendar.timegm(image_dt.timetuple())
 
     compression = _eval_or_default("compression", int, 6)
 
@@ -876,6 +1097,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
             else:
                 args["photometric"] = 'minisblack'
 
+        print ("PHOTMETRIC IS ", args["photometric"])
+       
         # planarconfig, samples_per_pixel, orientation, sample_format set by
         # tifffile.py
 
@@ -930,7 +1153,7 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
             extra_tags.append((NINJO_TAGS["NTD_ColorDepth"], 'i', 1, 8, True))
 
         extra_tags.append(
-            (NINJO_TAGS["NTD_DataSource"], 's', 0, data_source, True))
+            (NINJO_TAGS["NTD_DataSource"], 's', 0, data_source, True))      
         extra_tags.append((NINJO_TAGS["NTD_XMinimum"], 'i', 1, 1, True))
         extra_tags.append(
             (NINJO_TAGS["NTD_XMaximum"], 'i', 1, image_data.shape[1], True))
@@ -1003,12 +1226,20 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
             image_data.size * image_data.dtype.itemsize > 2000 * 2 ** 20:
         tifargs['bigtiff'] = True
 
+    
+    
+
     with tifffile.TiffWriter(output_fn, **tifargs) as tif:
+    
+
         tif.save(image_data, **args)
+        
         for _, scale in enumerate((2, 4, 8, 16)):
             shape = (image_data.shape[0] / scale,
                      image_data.shape[1] / scale)
-            if shape[0] > tile_width and shape[1] > tile_length:
+
+	    
+            if shape[0] > tile_width and shape[1] > tile_length:	    
                 args = _create_args(image_data[::scale, ::scale],
                                     pixel_xres * scale, pixel_yres * scale)
                 for key in header_only_keys:
@@ -1081,8 +1312,8 @@ if __name__ == '__main__':
             sys.exit(2)
     for page in pages:
         names = sorted(page.keys())
-        print ""
+        print ("")
         for name in names:
             if not print_color_maps and name == "color_map":
                 continue
-            print name, page[name]
+            print (name, page[name])
