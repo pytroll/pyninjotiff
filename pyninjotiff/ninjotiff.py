@@ -49,6 +49,8 @@ from pyresample.utils import proj4_radius_parameters
 #import mpop.imageo.formats.writer_options as write_opts
 from pyninjotiff import tifffile
 
+import trollimage
+
 log = logging.getLogger(__name__)
 
 #-------------------------------------------------------------------------
@@ -280,20 +282,21 @@ def _get_satellite_altitude(filename):
             return alt_
     return None
 
-
-def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True):
+def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True, is_mpop=True):
     """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
     and offset.
 
     :Parameters:
-        img : mpop.imageo.img.GeoImage
-            See MPOP's documentation.
+        img : xarray.XRImage or mpop.imageo.img.GeoImage 
+            See satpy's or mpop's documentation.
         dtype : bits per sample np.uint8 or np.uint16 (default: np.uint8)
         value_range_measurement_unit: list or tuple
             Defining minimum and maximum value range. Data will be clipped into
             that range. Default is no clipping and auto scale.
         data_is_scaled_01: boolean
             If true (default), input data is assumed to be in the [0.0, 1.0] range.
+        is_mpop: boolean
+            For backward compatibility.
 
     :Returns:
         image : numpy.array
@@ -311,7 +314,11 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
     """
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        data = img.channels[0]
+        if is_mpop :
+            data = img.channels[0]
+        else :
+            # TODO: check what is the corret fill value for NinJo!
+            data = img.fill_or_alpha(img.data[0], fill_value=0)
         fill_value = np.iinfo(dtype).min
         log.debug("Transparent pixel are forced to be %d" % fill_value)
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
@@ -345,8 +352,9 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
                 # Handle the case where all data has the same value.
                 scale = scale or 1
                 offset = value_range_measurement_unit[0]
-
-                mask = data.mask
+                
+                if is_mpop :
+                    mask = data.mask
 
                 offset -= scale
 
@@ -376,11 +384,13 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
 
                 # Scale data to dtype, and adjust for transparent pixel forced
                 # to be minimum.
-                mask = data.mask
+                if is_mpop :
+                    mask = data.mask
                 data = 1 + ((data.data - offset) / scale).astype(dtype)
                 offset -= scale
 
-            data[mask] = fill_value
+            if is_mpop :
+                data[mask] = fill_value
 
             if log.getEffectiveLevel() == logging.DEBUG:
                 d__ = np.ma.array(data, mask=(data == fill_value))
@@ -421,7 +431,10 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
 
     elif img.mode == 'P':
         fill_value = 0
-        data = img.channels[0]
+        if is_mpop :
+            data = img.channels[0]
+        else :
+            data = img.data[0]
         if isinstance(data, np.ma.core.MaskedArray):
             data = data.filled(fill_value)
         data = data.astype(dtype)
@@ -432,7 +445,6 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
     else:
         raise ValueError("Don't known how til handle image mode '%s'" %
                          str(img.mode))
-
 
 def save(img, filename, ninjo_product_name=None, writer_options=None,
          **kwargs):
@@ -481,13 +493,21 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 
     data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
+    is_mpop = True
+    if type(img) == trollimage.xrimage.XRImage :
+        is_mpop = False
     data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
-                                                value_range_measurement_unit=value_range_measurement_unit,)
-
-    area_def = img.info['area']
-    time_slot = img.info['start_time']
+                                                value_range_measurement_unit=value_range_measurement_unit,is_mpop=is_mpop,)
+    #import pdb
+    #pdb.set_trace()
+    if is_mpop :
+        area_def = img.info['area']
+        time_slot = img.info['start_time']
+    else :
+        area_def = img.data.area
+        time_slot = img.data.start_time
 
     # Some Ninjo tiff names
     kwargs['gradient'] = scale
@@ -769,6 +789,7 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     origin_lat = float(kwargs.pop("origin_lat"))
     origin_lon = float(kwargs.pop("origin_lon"))
     image_dt = kwargs.pop("image_dt")
+    zero_seconds = kwargs.pop("zero_seconds", False)
     projection = str(kwargs.pop("projection"))
     meridian_west = float(kwargs.pop("meridian_west", 0.0))
     meridian_east = float(kwargs.pop("meridian_east", 0.0))
@@ -842,7 +863,13 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
 
     file_dt = datetime.utcnow()
     file_epoch = calendar.timegm(file_dt.timetuple())
-    image_epoch = calendar.timegm(image_dt.timetuple())
+    if zero_seconds:
+        log.debug("Applying zero seconds correction")
+        image_dt_corr = datetime(image_dt.year, image_dt.month, image_dt.day,
+                                 image_dt.hour, image_dt.minute)
+    else:
+        image_dt_corr = image_dt
+    image_epoch = calendar.timegm(image_dt_corr.timetuple())
 
     compression = _eval_or_default("compression", int, 6)
 

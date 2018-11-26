@@ -3,19 +3,23 @@ from satpy import Scene
 from datetime import datetime
 from satpy.utils import debug_on
 import pyninjotiff
+from glob import glob
+from pyresample.utils import load_area
 debug_on()
 
 
-chn=10.8
-time_slot = datetime(2017, 1, 27, 7, 45)
-global_data = Scene(platform_name="Meteosat-10", sensor="seviri", reader="hrit_msg", start_time=time_slot)
+chn = "IR_108"
+ninjoRegion = load_area("areas.def", "nrEURO3km")
 
-global_data.load([chn])
-local_scene = global_data.resample("NinJoRegion")
+filenames = glob("data/*__")
+global_scene = Scene(reader="hrit_msg", filenames=filenames)
+global_scene.load([chn])
+local_scene = global_scene.resample(ninjoRegion)
 local_scene.save_dataset(chn, filename="msg.tif", writer='ninjotiff',
                       sat_id=1234,
                       chan_id=5678,
                       data_cat='GORN',
                       data_source='EUMETSAT/MeteoSwiss',
                       physic_unit='K',
-                      nbits=8)
+                      nbits=8,
+                      enhancement_config=False)
