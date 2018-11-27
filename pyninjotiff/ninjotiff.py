@@ -125,6 +125,8 @@ MODEL_PIXEL_SCALE_COUNT = int(os.environ.get(
     "GEOTIFF_MODEL_PIXEL_SCALE_COUNT", 3))
 
 
+FILL_VALUE = 0
+
 #-------------------------------------------------------------------------
 #
 # Read Ninjo products config file.
@@ -282,7 +284,7 @@ def _get_satellite_altitude(filename):
             return alt_
     return None
 
-def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True, is_mpop=True):
+def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True, is_old_satpy=True):
     """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
     and offset.
 
@@ -295,7 +297,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
             that range. Default is no clipping and auto scale.
         data_is_scaled_01: boolean
             If true (default), input data is assumed to be in the [0.0, 1.0] range.
-        is_mpop: boolean
+        is_old_satpy: boolean
             For backward compatibility.
 
     :Returns:
@@ -311,14 +313,19 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
     **Notes**:
         physic_val = image*scale + offset
         Example values for value_range_measurement_unit are (0, 125) or (40.0, -87.5)
+   
+    ***Warning***
+        Only the 'L' and 'RGB' cases are compatible with xarray.XRImage.
+        They still have to  be tested thoroughly.
     """
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        if is_mpop :
+        if is_old_satpy :
             data = img.channels[0]
         else :
             # TODO: check what is the corret fill value for NinJo!
-            data = img.fill_or_alpha(img.data[0], fill_value=0)
+            # At the moment it is just a hardcoded value FILL_VALUE
+            data = img.fill_or_alpha(img.data[0], fill_value=FILL_VALUE)
         fill_value = np.iinfo(dtype).min
         log.debug("Transparent pixel are forced to be %d" % fill_value)
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
@@ -353,7 +360,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
                 scale = scale or 1
                 offset = value_range_measurement_unit[0]
                 
-                if is_mpop :
+                if is_old_satpy :
                     mask = data.mask
 
                 offset -= scale
@@ -384,12 +391,14 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
 
                 # Scale data to dtype, and adjust for transparent pixel forced
                 # to be minimum.
-                if is_mpop :
+                if is_old_satpy :
                     mask = data.mask
                 data = 1 + ((data.data - offset) / scale).astype(dtype)
                 offset -= scale
 
-            if is_mpop :
+            # The mask is not available in this way in the new satpy
+            # based on XRImage
+            if is_old_satpy :
                 data[mask] = fill_value
 
             if log.getEffectiveLevel() == logging.DEBUG:
@@ -407,18 +416,30 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, scale, offset, fill_value
 
     elif img.mode == 'RGB':
-        channels, fill_value = img._finalize(dtype)
-        if fill_value is None:
+        if is_old_satpy :
+            # for mpop.imageo.img.GeoImage
+            channels, fill_value = img._finalize(dtype)
+        else :
+            # for xarray.XRImage
+            channels = img.finalize()
+
+        if is_old_satpy and fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
                     np.ma.getmaskarray(channels[2]))
             channels.append((np.ma.logical_not(mask) *
                              np.iinfo(channels[0].dtype).max).astype(channels[0].dtype))
             fill_value = (0, 0, 0, 0)
+            data = np.dstack([channel.filled(fill_v)
+                              for channel, fill_v in zip(channels, fill_value)])
+        else :
+            # stack the 3 RGB channels of the image
+            data = np.dstack(channels[0])
 
-        data = np.dstack([channel.filled(fill_v)
-                          for channel, fill_v in zip(channels, fill_value)])
-        return data, 1.0, 0.0, fill_value[0]
+        if is_old_satpy :
+           return data, 1.0, 0.0, fill_value[0]
+        else :
+           return data, 1.0, 0.0, FILL_VALUE 
 
     elif img.mode == 'RGBA':
         channels, fill_value = img._finalize(dtype)
@@ -431,7 +452,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
 
     elif img.mode == 'P':
         fill_value = 0
-        if is_mpop :
+        if is_old_satpy :
             data = img.channels[0]
         else :
             data = img.data[0]
@@ -493,16 +514,14 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 
     data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
-    is_mpop = True
+    is_old_satpy = True
     if type(img) == trollimage.xrimage.XRImage :
-        is_mpop = False
+        is_old_satpy = False
     data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
-                                                value_range_measurement_unit=value_range_measurement_unit,is_mpop=is_mpop,)
-    #import pdb
-    #pdb.set_trace()
-    if is_mpop :
+                                                value_range_measurement_unit=value_range_measurement_unit,is_old_satpy=is_old_satpy,)
+    if is_old_satpy :
         area_def = img.info['area']
         time_slot = img.info['start_time']
     else :
