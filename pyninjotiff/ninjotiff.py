@@ -283,7 +283,8 @@ def _get_satellite_altitude(filename):
     return None
 
 
-def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True, is_old_satpy=True):
+def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
+              data_is_scaled_01=True, is_masked=True, fill_value=None):
     """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
     and offset.
 
@@ -296,7 +297,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
             that range. Default is no clipping and auto scale.
         data_is_scaled_01: boolean
             If true (default), input data is assumed to be in the [0.0, 1.0] range.
-        is_old_satpy: boolean
+        is_masked: boolean
             For backward compatibility.
 
     :Returns:
@@ -318,22 +319,23 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         They still have to  be tested thoroughly.
     """
     if type(img) == trollimage.xrimage.XRImage:
-        is_old_satpy = False
+        is_masked = False
         log.debug("Latest version using trollimage.xrimage.XRImage")
 
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        if is_old_satpy :
+        if is_masked :
             data = img.channels[0]
         else :
             # TODO: check what is the corret fill value for NinJo!
-            # At the moment it is just a hardcoded value FILL_VALUE
-            data = img.finalize(dtype=dtype)
+            if fill_value != None:
+                log.debug("Forcing fill value to "+str(fill_value))
+            data = img.finalize(dtype=dtype, fill_value=fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
             data = data[0].to_masked_array()
 
-        fill_value = np.iinfo(dtype).min
+        fill_value = fill_value or np.iinfo(dtype).min
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
@@ -416,14 +418,14 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
                                                                 d__.max()))
                 del d__
 
-        if is_old_satpy:
+        if is_masked:
             return data, scale, offset, fill_value
         else:
             # returns the data band
             return data[0], scale, offset, fill_value
 
     elif img.mode == 'RGB':
-        if is_old_satpy:
+        if is_masked:
             channels, fill_value = img._finalize(dtype)
         else:
             data = img.finalize(dtype=dtype)
@@ -433,7 +435,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
             # Is this fill_value ok or what should it be?
             fill_value = (0, 0, 0, 0)
  
-        if fill_value is None:
+        if is_masked and fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
                     np.ma.getmaskarray(channels[2]))
@@ -446,6 +448,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'RGBA':
+        if not is_masked:
+            raise NotImplementedError("The 'RGBA' case has not been updated to xarray")
         channels, fill_value = img._finalize(dtype)
         fill_value = fill_value or (0, 0, 0, 0)
         data = np.dstack((channels[0].filled(fill_value[0]),
@@ -455,6 +459,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'P':
+        if not is_masked:
+            raise NotImplementedError("The 'P' case has not been updated to xarray")
         fill_value = 0
         data = img.channels[0]
         if isinstance(data, np.ma.core.MaskedArray):
@@ -508,6 +514,11 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
         if nbits == 16:
             dtype = np.uint16
 
+    fill_value = None
+    if 'fill_value' in kwargs and kwargs['fill_value'] != None:
+        fill_value = int(kwargs['fill_value'])
+
+
     try:
         value_range_measurement_unit = (float(kwargs["ch_min_measurement_unit"]),
                                         float(kwargs["ch_max_measurement_unit"]))
@@ -518,17 +529,16 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 
     # In case we are working on a trollimage.xrimage.XRImage,
     # a conversion to the previously used masked_array is needed
-    is_old_satpy = True
-    if type(img) == trollimage.xrimage.XRImage :
-         is_old_satpy = False
+    is_masked = isinstance(img, np.ma.MaskedArray)
 
     data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
                                                 value_range_measurement_unit=value_range_measurement_unit,
-                                                is_old_satpy=is_old_satpy,)
+                                                is_masked=is_masked,
+                                                fill_value=fill_value,)
 
-    if is_old_satpy :
+    if is_masked :
         area_def = img.info['area']
         time_slot = img.info['start_time']
     else :
