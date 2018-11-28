@@ -318,9 +318,6 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         Only the 'L' and 'RGB' cases are compatible with xarray.XRImage.
         They still have to  be tested thoroughly.
     """
-    if type(img) == trollimage.xrimage.XRImage:
-        is_masked = False
-        log.debug("Latest version using trollimage.xrimage.XRImage")
 
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
