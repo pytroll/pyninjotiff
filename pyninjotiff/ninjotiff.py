@@ -284,7 +284,7 @@ def _get_satellite_altitude(filename):
 
 
 def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
-              data_is_scaled_01=True, is_masked=True, fill_value=None):
+              data_is_scaled_01=True, fill_value=None):
     """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
     and offset.
 
@@ -297,8 +297,6 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             that range. Default is no clipping and auto scale.
         data_is_scaled_01: boolean
             If true (default), input data is assumed to be in the [0.0, 1.0] range.
-        is_masked: boolean
-            For backward compatibility.
 
     :Returns:
         image : numpy.array
@@ -321,7 +319,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        if is_masked :
+        if isinstance(img, np.ma.MaskedArray):
             data = img.channels[0]
         else :
             # TODO: check what is the corret fill value for NinJo!
@@ -332,7 +330,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             # with the following part of the code.
             data = data[0].to_masked_array()
 
-        fill_value = fill_value or np.iinfo(dtype).min
+        fill_value if fill_value is not None else np.iinfo(dtype).min 
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
@@ -415,14 +413,14 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                                                                 d__.max()))
                 del d__
 
-        if is_masked:
+        if isinstance(img, np.ma.MaskedArray):
             return data, scale, offset, fill_value
         else:
             # returns the data band
             return data[0], scale, offset, fill_value
 
     elif img.mode == 'RGB':
-        if is_masked:
+        if isinstance(img, np.ma.MaskedArray):
             channels, fill_value = img._finalize(dtype)
         else:
             data = img.finalize(dtype=dtype)
@@ -432,7 +430,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             # Is this fill_value ok or what should it be?
             fill_value = (0, 0, 0, 0)
  
-        if is_masked and fill_value is None:
+        if isinstance(img, np.ma.MaskedArray) and fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
                     np.ma.getmaskarray(channels[2]))
@@ -445,7 +443,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'RGBA':
-        if not is_masked:
+        if not isinstance(img, np.ma.MaskedArray):
             raise NotImplementedError("The 'RGBA' case has not been updated to xarray")
         channels, fill_value = img._finalize(dtype)
         fill_value = fill_value or (0, 0, 0, 0)
@@ -456,7 +454,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'P':
-        if not is_masked:
+        if not isinstance(img, np.ma.MaskedArray):
             raise NotImplementedError("The 'P' case has not been updated to xarray")
         fill_value = 0
         data = img.channels[0]
@@ -468,7 +466,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         return data, 1.0, 0.0, fill_value
 
     else:
-        raise ValueError("Don't known how til handle image mode '%s'" %
+        raise ValueError("Don't know how to handle image mode '%s'" %
                          str(img.mode))
 
 
@@ -526,16 +524,14 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 
     # In case we are working on a trollimage.xrimage.XRImage,
     # a conversion to the previously used masked_array is needed
-    is_masked = isinstance(img, np.ma.MaskedArray)
 
     data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
                                                 value_range_measurement_unit=value_range_measurement_unit,
-                                                is_masked=is_masked,
                                                 fill_value=fill_value,)
 
-    if is_masked :
+    if isinstance(img, np.ma.MaskedArray):
         area_def = img.info['area']
         time_slot = img.info['start_time']
     else :
