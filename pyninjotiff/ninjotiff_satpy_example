@@ -5,6 +5,7 @@ from satpy.utils import debug_on
 import pyninjotiff
 from glob import glob
 from pyresample.utils import load_area
+import copy
 debug_on()
 
 
@@ -16,10 +17,9 @@ global_scene = Scene(reader="hrit_msg", filenames=filenames)
 global_scene.load([chn])
 local_scene = global_scene.resample(ninjoRegion)
 local_scene.save_dataset(chn, filename="msg.tif", writer='ninjotiff',
-                      sat_id=1234,
-                      chan_id=5678,
+                      sat_id=6300014,
+                      chan_id=900015,
                       data_cat='GORN',
-                      data_source='EUMETSAT/MeteoSwiss',
+                      data_source='EUMCAST',
                       physic_unit='K',
-                      nbits=8,
-                      enhancement_config=False)
+                      nbits=8)

@@ -8,17 +8,16 @@ from pyresample.utils import load_area
 debug_on()
 
 
-chn = "night_fog"
+chn = "airmass"
 ninjoRegion = load_area("areas.def", "nrEURO3km")
 
 filenames = glob("data/*__")
 global_scene = Scene(reader="hrit_msg", filenames=filenames)
 global_scene.load([chn])
 local_scene = global_scene.resample(ninjoRegion)
-#local_scene.save_dataset(chn, filename="rgb.png")
-local_scene.save_dataset(chn, filename="rgb.tif", writer='ninjotiff',
-                      sat_id=1234,
-                      chan_id=5678,
-                      data_cat='GORN',
-                      data_source='EUMETSAT/MeteoSwiss',
+local_scene.save_dataset(chn, filename="airmass.tif", writer='ninjotiff',
+                      sat_id=6300014,
+                      chan_id=6500015,
+                      data_cat='GPRN',
+                      data_source='EUMCAST',
                       nbits=8)
