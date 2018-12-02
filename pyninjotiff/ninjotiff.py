@@ -130,7 +130,28 @@ MODEL_PIXEL_SCALE_COUNT = int(os.environ.get(
 # Read Ninjo products config file.
 #
 #-------------------------------------------------------------------------
-def get_product_config(product_name, force_read=False):
+def get_writer_config(config_fname, prod, single_product_config, scn_metadata):
+    """Writer_config function for Trollflow_sat: calls the get_product_config function
+
+    :Parameters:
+       config_fname: str
+            Name of the Ninjo product configuration file
+
+       prod: str
+            Name of Ninjo product.
+
+       single_product_config: dict
+            config params for the current product
+
+       scn_metadata: dict
+            Satpy satellite data
+    """
+    ninjo_product = prod
+    if 'ninjo_product_name' in single_product_config:
+        ninjo_product = single_product_config['ninjo_product_name']
+    return get_product_config(ninjo_product, True, config_fname)
+
+def get_product_config(product_name, force_read=False, config_filename=None):
     """Read Ninjo configuration entry for a given product name.
 
     :Parameters:
@@ -147,7 +168,7 @@ def get_product_config(product_name, force_read=False):
         * As an example, see *ninjotiff_products.cfg.template* in
           MPOP's *etc* directory.
     """
-    return ProductConfigs()(product_name, force_read)
+    return ProductConfigs()(product_name, force_read, config_filename)
 
 
 class _Singleton(type):
@@ -168,16 +189,19 @@ class ProductConfigs(object):
     def __init__(self):
         self.read_config()
 
-    def __call__(self, product_name, force_read=False):
+    def __call__(self, product_name, force_read=False, config_filename=None):
         if force_read:
-            self.read_config()
-        return self._products[product_name]
+            self.read_config(config_filename)
+        if product_name in self._products:
+            return self._products[product_name]
+        else:
+            return {}
 
     @property
     def product_names(self):
         return sorted(self._products.keys())
 
-    def read_config(self):
+    def read_config(self, config_filename=None):
         from ConfigParser import ConfigParser
 
         def _eval(val):
@@ -186,28 +210,36 @@ class ProductConfigs(object):
             except:
                 return str(val)
 
-        filename = self._find_a_config_file()
+        if config_filename is not None:
+            filename = self._find_a_config_file(config_filename)
+        else:
+            filename = self._find_a_config_file('ninjotiff_products.cfg')
         log.info("Reading Ninjo config file: '%s'" % filename)
 
         cfg = ConfigParser()
-        cfg.read(filename)
-        products = {}
-        for sec in cfg.sections():
-            prd = {}
-            for key, val in cfg.items(sec):
-                prd[key] = _eval(val)
-            products[sec] = prd
-        self._products = products
+        if filename is not None:
+            cfg.read(filename)
+            products = {}
+            for sec in cfg.sections():
+                prd = {}
+                for key, val in cfg.items(sec):
+                   prd[key] = _eval(val)
+                products[sec] = prd
+            self._products = products
 
     @staticmethod
-    def _find_a_config_file():
-        name_ = 'ninjotiff_products.cfg'
-        home_ = os.path.dirname(os.path.abspath(__file__))
-        penv_ = os.environ.get('PPP_CONFIG_DIR', '')
-        for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
-            if os.path.isfile(fname_):
-                return fname_
-        raise ValueError("Could not find a Ninjo tiff config file")
+    def _find_a_config_file(fname):
+        # if config file (fname) is not found as absolute path: look for the config file in the PPP_CONFIG_DIR or current dir
+        name_ = fname
+        if os.path.isfile(name_):
+            return name_
+        else:
+            home_ = os.path.dirname(os.path.abspath(__file__))
+            penv_ = os.environ.get('PPP_CONFIG_DIR', '')
+            for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
+                if os.path.isfile(fname_):
+                    return fname_
+        #raise ValueError("Could not find a Ninjo tiff config file")
 
 
 #-------------------------------------------------------------------------
@@ -634,7 +666,11 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs['altitude'] = altitude
 
     if product_name:
-        options = deepcopy(get_product_config(product_name))
+        # If ninjo_product_file in kwargs, load ninjo_product_file as config file
+        if 'ninjo_product_file' in kwargs:
+            options = deepcopy(get_product_config(product_name, True, kwargs['ninjo_product_file']))
+        else:
+            options = deepcopy(get_product_config(product_name))
     else:
         options = {}
 
