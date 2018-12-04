@@ -217,15 +217,15 @@ class ProductConfigs(object):
         log.info("Reading Ninjo config file: '%s'" % filename)
 
         cfg = ConfigParser()
+        products = {}
         if filename is not None:
             cfg.read(filename)
-            products = {}
             for sec in cfg.sections():
                 prd = {}
                 for key, val in cfg.items(sec):
                    prd[key] = _eval(val)
                 products[sec] = prd
-            self._products = products
+        self._products = products
 
     @staticmethod
     def _find_a_config_file(fname):
@@ -355,14 +355,14 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             data = img.channels[0]
         else :
             # TODO: check what is the corret fill value for NinJo!
-            if fill_value != None:
-                log.debug("Forcing fill value to "+str(fill_value))
+            if fill_value is not None:
+                log.debug("Forcing fill value to %s", fill_value)
             data = img.finalize(dtype=dtype, fill_value=fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
             data = data[0].to_masked_array()
 
-        fill_value if fill_value is not None else np.iinfo(dtype).min 
+        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min 
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
