@@ -355,8 +355,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             data = img.channels[0]
         else :
             # TODO: check what is the corret fill value for NinJo!
-            if fill_value != None:
-                log.debug("Forcing fill value to "+str(fill_value))
+            if fill_value is not None:
+                log.debug("Forcing fill value to %s", fill_value)
             data = img.finalize(dtype=dtype, fill_value=fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
