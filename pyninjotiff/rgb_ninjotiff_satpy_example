@@ -5,21 +5,19 @@ from satpy.utils import debug_on
 import pyninjotiff
 from glob import glob
 from pyresample.utils import load_area
-import copy
 debug_on()
 
 
-chn = "IR_108"
+chn = "airmass"
 ninjoRegion = load_area("areas.def", "nrEURO3km")
 
 filenames = glob("data/*__")
 global_scene = Scene(reader="hrit_msg", filenames=filenames)
 global_scene.load([chn])
 local_scene = global_scene.resample(ninjoRegion)
-local_scene.save_dataset(chn, filename="msg.tif", writer='ninjotiff',
+local_scene.save_dataset(chn, filename="airmass.tif", writer='ninjotiff',
                       sat_id=6300014,
-                      chan_id=900015,
-                      data_cat='GORN',
+                      chan_id=6500015,
+                      data_cat='GPRN',
                       data_source='EUMCAST',
-                      physic_unit='K',
                       nbits=8)

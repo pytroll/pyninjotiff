@@ -17,9 +17,8 @@ global_scene = Scene(reader="hrit_msg", filenames=filenames)
 global_scene.load([chn])
 local_scene = global_scene.resample(ninjoRegion)
 local_scene.save_dataset(chn, filename="msg.tif", writer='ninjotiff',
-                      sat_id=6300014,
-                      chan_id=900015,
-                      data_cat='GORN',
-                      data_source='EUMCAST',
-                      physic_unit='K',
-                      nbits=8)
+                      # ninjo product name to look for in .cfg file
+                      ninjo_product_name="IR_108",
+                      # custom configuration file for ninjo tiff products
+                      # if not specified PPP_CONFIG_DIR is used as config file directory
+                      ninjo_product_file="/config_dir/ninjotiff_products.cfg")

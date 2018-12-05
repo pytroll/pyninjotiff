@@ -48,8 +48,10 @@ from pyresample.utils import proj4_radius_parameters
 
 #import mpop.imageo.formats.writer_options as write_opts
 from pyninjotiff import tifffile
+import trollimage
 
 log = logging.getLogger(__name__)
+
 
 #-------------------------------------------------------------------------
 #
@@ -128,7 +130,28 @@ MODEL_PIXEL_SCALE_COUNT = int(os.environ.get(
 # Read Ninjo products config file.
 #
 #-------------------------------------------------------------------------
-def get_product_config(product_name, force_read=False):
+def get_writer_config(config_fname, prod, single_product_config, scn_metadata):
+    """Writer_config function for Trollflow_sat: calls the get_product_config function
+
+    :Parameters:
+       config_fname: str
+            Name of the Ninjo product configuration file
+
+       prod: str
+            Name of Ninjo product.
+
+       single_product_config: dict
+            config params for the current product
+
+       scn_metadata: dict
+            Satpy satellite data
+    """
+    ninjo_product = prod
+    if 'ninjo_product_name' in single_product_config:
+        ninjo_product = single_product_config['ninjo_product_name']
+    return get_product_config(ninjo_product, True, config_fname)
+
+def get_product_config(product_name, force_read=False, config_filename=None):
     """Read Ninjo configuration entry for a given product name.
 
     :Parameters:
@@ -145,7 +168,7 @@ def get_product_config(product_name, force_read=False):
         * As an example, see *ninjotiff_products.cfg.template* in
           MPOP's *etc* directory.
     """
-    return ProductConfigs()(product_name, force_read)
+    return ProductConfigs()(product_name, force_read, config_filename)
 
 
 class _Singleton(type):
@@ -166,16 +189,19 @@ class ProductConfigs(object):
     def __init__(self):
         self.read_config()
 
-    def __call__(self, product_name, force_read=False):
+    def __call__(self, product_name, force_read=False, config_filename=None):
         if force_read:
-            self.read_config()
-        return self._products[product_name]
+            self.read_config(config_filename)
+        if product_name in self._products:
+            return self._products[product_name]
+        else:
+            return {}
 
     @property
     def product_names(self):
         return sorted(self._products.keys())
 
-    def read_config(self):
+    def read_config(self, config_filename=None):
         from ConfigParser import ConfigParser
 
         def _eval(val):
@@ -184,28 +210,36 @@ class ProductConfigs(object):
             except:
                 return str(val)
 
-        filename = self._find_a_config_file()
+        if config_filename is not None:
+            filename = self._find_a_config_file(config_filename)
+        else:
+            filename = self._find_a_config_file('ninjotiff_products.cfg')
         log.info("Reading Ninjo config file: '%s'" % filename)
 
         cfg = ConfigParser()
-        cfg.read(filename)
         products = {}
-        for sec in cfg.sections():
-            prd = {}
-            for key, val in cfg.items(sec):
-                prd[key] = _eval(val)
-            products[sec] = prd
+        if filename is not None:
+            cfg.read(filename)
+            for sec in cfg.sections():
+                prd = {}
+                for key, val in cfg.items(sec):
+                   prd[key] = _eval(val)
+                products[sec] = prd
         self._products = products
 
     @staticmethod
-    def _find_a_config_file():
-        name_ = 'ninjotiff_products.cfg'
-        home_ = os.path.dirname(os.path.abspath(__file__))
-        penv_ = os.environ.get('PPP_CONFIG_DIR', '')
-        for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
-            if os.path.isfile(fname_):
-                return fname_
-        raise ValueError("Could not find a Ninjo tiff config file")
+    def _find_a_config_file(fname):
+        # if config file (fname) is not found as absolute path: look for the config file in the PPP_CONFIG_DIR or current dir
+        name_ = fname
+        if os.path.isfile(name_):
+            return name_
+        else:
+            home_ = os.path.dirname(os.path.abspath(__file__))
+            penv_ = os.environ.get('PPP_CONFIG_DIR', '')
+            for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
+                if os.path.isfile(fname_):
+                    return fname_
+        #raise ValueError("Could not find a Ninjo tiff config file")
 
 
 #-------------------------------------------------------------------------
@@ -281,7 +315,8 @@ def _get_satellite_altitude(filename):
     return None
 
 
-def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_scaled_01=True):
+def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
+              data_is_scaled_01=True, fill_value=None):
     """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
     and offset.
 
@@ -308,14 +343,30 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
     **Notes**:
         physic_val = image*scale + offset
         Example values for value_range_measurement_unit are (0, 125) or (40.0, -87.5)
+
+    ***Warning***
+        Only the 'L' and 'RGB' cases are compatible with xarray.XRImage.
+        They still have to  be tested thoroughly.
     """
+
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
-        data = img.channels[0]
-        fill_value = np.iinfo(dtype).min
-        log.debug("Transparent pixel are forced to be %d" % fill_value)
+        if isinstance(img, np.ma.MaskedArray):
+            data = img.channels[0]
+        else :
+            # TODO: check what is the corret fill value for NinJo!
+            if fill_value is not None:
+                log.debug("Forcing fill value to %s", fill_value)
+            data = img.finalize(dtype=dtype, fill_value=fill_value)
+            # Go back to the masked_array for compatibility
+            # with the following part of the code.
+            data = data[0].to_masked_array()
+
+        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min 
+
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
+
         if np.ma.count_masked(data) == data.size:
             # All data is masked
             data = np.ones(data.shape, dtype=dtype) * fill_value
@@ -394,11 +445,24 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
                                                                 d__.max()))
                 del d__
 
-        return data, scale, offset, fill_value
+        if isinstance(img, np.ma.MaskedArray):
+            return data, scale, offset, fill_value
+        else:
+            # returns the data band
+            return data[0], scale, offset, fill_value
 
     elif img.mode == 'RGB':
-        channels, fill_value = img._finalize(dtype)
-        if fill_value is None:
+        if isinstance(img, np.ma.MaskedArray):
+            channels, fill_value = img._finalize(dtype)
+        else:
+            data = img.finalize(dtype=dtype)
+            # Go back to the masked_array for compatibility with
+            # the rest of the code.
+            channels = data[0].to_masked_array()
+            # Is this fill_value ok or what should it be?
+            fill_value = (0, 0, 0, 0)
+ 
+        if isinstance(img, np.ma.MaskedArray) and fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
                     np.ma.getmaskarray(channels[2]))
@@ -411,6 +475,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'RGBA':
+        if not isinstance(img, np.ma.MaskedArray):
+            raise NotImplementedError("The 'RGBA' case has not been updated to xarray")
         channels, fill_value = img._finalize(dtype)
         fill_value = fill_value or (0, 0, 0, 0)
         data = np.dstack((channels[0].filled(fill_value[0]),
@@ -420,6 +486,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, 1.0, 0.0, fill_value[0]
 
     elif img.mode == 'P':
+        if not isinstance(img, np.ma.MaskedArray):
+            raise NotImplementedError("The 'P' case has not been updated to xarray")
         fill_value = 0
         data = img.channels[0]
         if isinstance(data, np.ma.core.MaskedArray):
@@ -430,7 +498,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None, data_is_sc
         return data, 1.0, 0.0, fill_value
 
     else:
-        raise ValueError("Don't known how til handle image mode '%s'" %
+        raise ValueError("Don't know how to handle image mode '%s'" %
                          str(img.mode))
 
 
@@ -473,6 +541,11 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
         if nbits == 16:
             dtype = np.uint16
 
+    fill_value = None
+    if 'fill_value' in kwargs and kwargs['fill_value'] != None:
+        fill_value = int(kwargs['fill_value'])
+
+
     try:
         value_range_measurement_unit = (float(kwargs["ch_min_measurement_unit"]),
                                         float(kwargs["ch_max_measurement_unit"]))
@@ -481,13 +554,21 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 
     data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
+    # In case we are working on a trollimage.xrimage.XRImage,
+    # a conversion to the previously used masked_array is needed
+
     data, scale, offset, fill_value = _finalize(img,
                                                 dtype=dtype,
                                                 data_is_scaled_01=data_is_scaled_01,
-                                                value_range_measurement_unit=value_range_measurement_unit,)
+                                                value_range_measurement_unit=value_range_measurement_unit,
+                                                fill_value=fill_value,)
 
-    area_def = img.info['area']
-    time_slot = img.info['start_time']
+    if isinstance(img, np.ma.MaskedArray):
+        area_def = img.info['area']
+        time_slot = img.info['start_time']
+    else :
+        area_def = img.data.area
+        time_slot = img.data.start_time
 
     # Some Ninjo tiff names
     kwargs['gradient'] = scale
@@ -585,7 +666,11 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs['altitude'] = altitude
 
     if product_name:
-        options = deepcopy(get_product_config(product_name))
+        # If ninjo_product_file in kwargs, load ninjo_product_file as config file
+        if 'ninjo_product_file' in kwargs:
+            options = deepcopy(get_product_config(product_name, True, kwargs['ninjo_product_file']))
+        else:
+            options = deepcopy(get_product_config(product_name))
     else:
         options = {}
 
@@ -769,6 +854,7 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     origin_lat = float(kwargs.pop("origin_lat"))
     origin_lon = float(kwargs.pop("origin_lon"))
     image_dt = kwargs.pop("image_dt")
+    zero_seconds = kwargs.pop("zero_seconds", False)
     projection = str(kwargs.pop("projection"))
     meridian_west = float(kwargs.pop("meridian_west", 0.0))
     meridian_east = float(kwargs.pop("meridian_east", 0.0))
@@ -842,7 +928,13 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
 
     file_dt = datetime.utcnow()
     file_epoch = calendar.timegm(file_dt.timetuple())
-    image_epoch = calendar.timegm(image_dt.timetuple())
+    if zero_seconds:
+        log.debug("Applying zero seconds correction")
+        image_dt_corr = datetime(image_dt.year, image_dt.month, image_dt.day,
+                                 image_dt.hour, image_dt.minute)
+    else:
+        image_dt_corr = image_dt
+    image_epoch = calendar.timegm(image_dt_corr.timetuple())
 
     compression = _eval_or_default("compression", int, 6)
 
