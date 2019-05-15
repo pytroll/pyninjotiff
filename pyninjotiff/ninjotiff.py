@@ -358,6 +358,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             if fill_value is not None:
                 log.debug("Forcing fill value to %s", fill_value)
             data = img.finalize(dtype=dtype, fill_value=fill_value)
+            data_is_scaled_01 = False
+            #-data = img.data
             # Go back to the masked_array for compatibility
             # with the following part of the code.
             data = data[0].to_masked_array()
@@ -367,12 +369,13 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
 
-        if np.ma.count_masked(data) == data.size:
+        if False and np.ma.count_masked(data) == data.size:
             # All data is masked
             data = np.ones(data.shape, dtype=dtype) * fill_value
             scale = 1
             offset = 0
         else:
+            #  value_range_measurement_unit = None
             if value_range_measurement_unit and data_is_scaled_01:
                 # No additional scaling of the input data - assume that data is
                 # within [0.0, 1.0] and interpret 0.0 as
@@ -383,9 +386,9 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 scale_fill_value = (
                     (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
                 img = deepcopy(img)
-                img.channels[0] *= scale_fill_value
+                data *= scale_fill_value
 
-                img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
+                data += 1 / (np.iinfo(dtype).max + 1.0)
 
                 channels, fill_value = img._finalize(dtype)
                 data = channels[0]
@@ -393,6 +396,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 scale = ((value_range_measurement_unit[1] -
                           value_range_measurement_unit[0]) /
                          (np.iinfo(dtype).max))
+
                 # Handle the case where all data has the same value.
                 scale = scale or 1
                 offset = value_range_measurement_unit[0]
@@ -405,7 +409,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                     fill_value = 0
 
             else:
-                if value_range_measurement_unit:
+                if value_range_measurement_unit and len(value_range_measurement_unit)<=2:
                     data.clip(value_range_measurement_unit[0],
                               value_range_measurement_unit[1], data)
                     chn_min = value_range_measurement_unit[0]
@@ -413,23 +417,32 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                     log.debug("Scaling, using value range %.2f - %.2f" %
                               (value_range_measurement_unit[0], value_range_measurement_unit[1]))
                 else:
+
                     chn_max = data.max()
                     chn_min = data.min()
                     log.debug("Doing auto scaling")
 
                 # Make room for transparent pixel.
                 scale = ((chn_max - chn_min) /
-                         (np.iinfo(dtype).max - 1.0))
-
-                # Handle the case where all data has the same value.
+                        (np.iinfo(dtype).max - 1.0))
                 scale = scale or 1
                 offset = chn_min
+
+                # Handle the case where all data has the same value.
+                if value_range_measurement_unit and len(value_range_measurement_unit) <= 2 :
+                    scale = scale or 1
+                    offset = chn_min
+                # else :
 
                 # Scale data to dtype, and adjust for transparent pixel forced
                 # to be minimum.
                 mask = data.mask
                 data = 1 + ((data.data - offset) / scale).astype(dtype)
                 offset -= scale
+
+                if value_range_measurement_unit and not value_range_measurement_unit[2]:
+                    scale = (value_range_measurement_unit[1] - value_range_measurement_unit[0]) / 256
+                    offset = value_range_measurement_unit[0];
 
             data[mask] = fill_value
 
@@ -545,12 +558,32 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
     if 'fill_value' in kwargs and kwargs['fill_value'] != None:
         fill_value = int(kwargs['fill_value'])
 
+    value_range_measurement_unit = None
+    #checkpoint: read min max values outputinfo
+    if 'outputinfo' in img.data.attrs:
+        try:
+            maxvalue = img.data.attrs['outputinfo']['max_value'][0]
+            minvalue = img.data.attrs['outputinfo']['min_value'][0]
+            # see if we need to convert kelvit to celcius
+            if img.data.attrs['outputinfo']['physic_value'] == "T" :
+                convert = 0.
+                if img.data.attrs['outputinfo']['physic_unit'] == "KELVIN" and kwargs["physic_unit"] == "CELSIUS":
+                    convert = -273
+                if img.data.attrs['outputinfo']['physic_unit'] == "CELSIUS" and kwargs["physic_unit"] == "KELVIN":
+                    convert = 273
+                value_range_measurement_unit = (float(minvalue)+convert,float(maxvalue)+convert,False)
+
+        except KeyError:
+            log.debug("outputinfo data not found")
+
+
 
     try:
         value_range_measurement_unit = (float(kwargs["ch_min_measurement_unit"]),
                                         float(kwargs["ch_max_measurement_unit"]))
     except KeyError:
-        value_range_measurement_unit = None
+        log.debug("not forced ch_min and max in ninjo config file")
+
 
     data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
