@@ -391,10 +391,9 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                   (data.min(), data.mean(), data.max()))
 
 
-        #vg: problem of values 0 if data is 256
         scale_fill = ((np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
         data *= scale_fill
-        #end vg
+        
         data = (1 + ((data-offset_val) / scale_val)).astype(dtype)
 
         #data = all(data) if all(data) < 256 else 255
