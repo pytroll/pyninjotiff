@@ -362,7 +362,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             # with the following part of the code.
             data = data[0].to_masked_array()
 
-        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min 
+        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
@@ -461,7 +461,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             channels = data[0].to_masked_array()
             # Is this fill_value ok or what should it be?
             fill_value = (0, 0, 0, 0)
- 
+
         if isinstance(img, np.ma.MaskedArray) and fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
@@ -593,7 +593,7 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     """Generic Ninjo TIFF writer.
 
-    If 'prodcut_name' is given, it will load corresponding Ninjo tiff metadata
+    If 'product_name' is given, it will load corresponding Ninjo tiff metadata
     from '${PPP_CONFIG_DIR}/ninjotiff.cfg'. Else, all Ninjo tiff metadata should
     be passed by '**kwargs'. A mixture is allowed, where passed arguments
     overwrite config file.
@@ -612,9 +612,7 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs : dict
             See _write
     """
-    
-
-    proj  = Proj(area_def.proj_dict) 
+    proj = Proj(area_def.proj_dict)
     upper_left = proj(
         area_def.area_extent[0],
         area_def.area_extent[3],
@@ -622,8 +620,8 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     lower_right = proj(
         area_def.area_extent[2],
         area_def.area_extent[1],
-        inverse=True)    
- 
+        inverse=True)
+
     if len(image_data.shape) == 3:
         if image_data.shape[2] == 4:
             shape = (area_def.y_size, area_def.x_size, 4)
@@ -686,9 +684,8 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
             options['ref_lat2'] = 0
     if 'lon_0' in area_def.proj_dict:
         options['central_meridian'] = area_def.proj_dict['lon_0']
-	
 
-    a,b = proj4_radius_parameters(area_def.proj_dict)
+    a, b = proj4_radius_parameters(area_def.proj_dict)
     options['radius_a'] = a
     options['radius_b'] = b
     options['origin_lon'] = upper_left[0]
@@ -1152,9 +1149,9 @@ if __name__ == '__main__':
     try:
         filename = args[0]
     except IndexError:
-        print >> sys.stderr, """usage: python ninjotiff.py [<-p page-number>] [-c] <ninjotiff-filename>
+        print("""usage: python ninjotiff.py [<-p page-number>] [-c] <ninjotiff-filename>
     -p <page-number>: print page number (default are all pages).
-    -c: print color maps (default is not to print color maps)."""
+    -c: print color maps (default is not to print color maps).""", sys.stderr)
         sys.exit(2)
 
     pages = read_tags(filename)
@@ -1162,12 +1159,12 @@ if __name__ == '__main__':
         try:
             pages = [pages[page_no]]
         except IndexError:
-            print >>sys.stderr, "Invalid page number '%d'" % page_no
+            print("Invalid page number '%d'" % page_no, sys.stderr)
             sys.exit(2)
     for page in pages:
         names = sorted(page.keys())
-        print ""
+        print("")
         for name in names:
             if not print_color_maps and name == "color_map":
                 continue
-            print name, page[name]
+            print(name, page[name])
