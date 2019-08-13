@@ -362,7 +362,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             # with the following part of the code.
             data = data[0].to_masked_array()
 
-        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
+        fill_value = fill_value if fill_value is not None else np.iinfo(
+            dtype).min
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
