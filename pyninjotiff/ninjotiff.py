@@ -348,7 +348,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         Only the 'L' and 'RGB' cases are compatible with xarray.XRImage.
         They still have to  be tested thoroughly.
     """
-    # start TA
+
+    # use_value_range mode: calculate slope and offset from satpy stretching values
     if use_value_range:
         
         if fill_value is not None:
@@ -408,8 +409,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
 
         return data[0], scale, offset, fill_value
-            
-    #end TA
+
 
     if img.mode == 'L' and not use_value_range:
         # PFE: mpop.satout.cfscene
@@ -451,17 +451,19 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 scale_fill_value = (
                         (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
                 img = deepcopy(img)
-                #img.channels[0] *= scale_fill_value
-                #data = img.data
-                data[0] *= scale_fill_value
+                img.channels[0] *= scale_fill_value
 
-                #img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
-                data[0] += 1 / (np.iinfo(dtype).max + 1.0)
-
-                #channels, fill_value = img._finalize(dtype)
-                #data = channels[0]
+                #test
                 #data = img.data
-                #img.data = data
+                #data[0] *= scale_fill_value
+
+                img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
+
+                #test
+                #data[0] += 1 / (np.iinfo(dtype).max + 1.0)
+
+                channels, fill_value = img._finalize(dtype)
+                data = channels[0]
 
                 scale = ((value_range_measurement_unit[1] -
                           value_range_measurement_unit[0]) /
@@ -485,8 +487,13 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                     log.debug("Scaling, using value range %.2f - %.2f" %
                               (value_range_measurement_unit[0], value_range_measurement_unit[1]))
                 else:
-                    chn_max = data[0].max()
-                    chn_min = data[0].min()
+
+                    chn_max = data.max()
+                    chn_min = data.min()
+
+                    #test
+                    #chn_max = data[0].max()
+                    #chn_min = data[0].min()
                     log.debug("Doing auto scaling")
 
                 # Make room for transparent pixel.
@@ -625,14 +632,22 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
 
     # If new mode for pyninjotiff
     if 'output_info' in img.data.attrs and use_range:
-        try:
+        min_value = None
+        max_value = None
+        if isinstance(img.data.attrs['output_info']['max_value'],float):
+            min_value = img.data.attrs['output_info']['min_value']
+            max_value = img.data.attrs['output_info']['max_value']
+        else:
             try:
                 max_value = img.data.attrs['output_info']['max_value'][0]
                 min_value = img.data.attrs['output_info']['min_value'][0]
             except IndexError:
                 max_value = img.data.attrs['output_info']['max_value'][()]
                 min_value = img.data.attrs['output_info']['min_value'][()]
-            # see if we need to convert kelvit to celcius
+            except KeyError:
+                log.debug("output_info data not found")
+        if min_value is not None and max_value is not None:
+            # do we need to convert kelvin to celcius
             value_range_measurement_unit = [min_value, max_value]
             convert = 0.
             if ('physic_value' in img.data.attrs['output_info'] and
@@ -644,10 +659,6 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
                     if img.data.attrs['output_info']['physic_unit'] == "CELSIUS" and kwargs["physic_unit"] == "KELVIN":
                         convert = 273
             value_range_measurement_unit = [float(min_value)+convert,float(max_value)+convert]
-        except KeyError:
-            log.debug("output_info data not found")
-
-
 
     try:
         value_range_measurement_unit = [float(kwargs["ch_min_measurement_unit"]),
