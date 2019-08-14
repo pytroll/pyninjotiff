@@ -415,7 +415,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         # PFE: mpop.satout.cfscene
         if isinstance(img, np.ma.MaskedArray):
             data = img.channels[0]
-        else:
+        else :
             # TODO: check what is the corret fill value for NinJo!
             if fill_value is not None:
                 log.debug("Forcing fill value to %s", fill_value)
@@ -449,7 +449,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
                 # Make room for transparent pixel.
                 scale_fill_value = (
-                        (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
+                    (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
                 img = deepcopy(img)
                 img.channels[0] *= scale_fill_value
 
