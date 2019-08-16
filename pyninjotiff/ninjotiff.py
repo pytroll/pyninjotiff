@@ -356,8 +356,6 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             log.debug("Forcing fill value to %s", fill_value)
 
         data = img.data
-        #data = img.finalize(dtype=dtype, fill_value=fill_value)
-        #data = data[0].to_masked_array()
 
         fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
         log.debug("Entry xarray: %.2f, %.2f, %.2f" %
@@ -397,16 +395,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         
         data = (1 + ((data-offset_val) / scale_val)).astype(dtype)
 
-        #data = all(data) if all(data) < 256 else 255
-        #data = ((data-offset_val) / scale_val).astype(dtype)
-
         log.debug("After scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
-        #data = img.finalize(dtype=dtype, fill_value=fill_value)
-        #data = data.to_masked_array()
-        #mask = data.mask
-        #data[mask] = fill_value
-
 
         return data[0], scale, offset, fill_value
 
