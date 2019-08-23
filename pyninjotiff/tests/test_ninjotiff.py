@@ -32,6 +32,7 @@ import colorsys
 TIME = datetime.datetime.utcnow()
 DELETE_FILES = True
 
+
 class FakeImage(object):
     """Fake Image object for testing purposes."""
 
@@ -92,8 +93,10 @@ def test_write_bw():
               'chan_id': 900015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': '%', 'nbits': 8}
 
-    data = da.tile(da.repeat(da.arange(4, chunks=1024) / 3.0, 256), 1024).reshape((1, 1024, 1024))
-    data = xr.DataArray(data, coords={'bands': ['L']}, dims=['bands', 'y', 'x'], attrs=attrs)
+    data = da.tile(da.repeat(da.arange(4, chunks=1024) /
+                             3.0, 256), 1024).reshape((1, 1024, 1024))
+    data = xr.DataArray(data, coords={'bands': ['L']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
     img = FakeImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
         filename = tmpfile.name
@@ -102,7 +105,8 @@ def test_write_bw():
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
         res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256], np.array([256, 22016, 43520, 65280])))
+        assert(np.allclose(res[0, 0, ::256],
+                           np.array([256, 22016, 43520, 65280])))
 
 
 def test_write_bw_inverted_ir():
@@ -137,8 +141,10 @@ def test_write_bw_inverted_ir():
               'chan_id': 900015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': 'C', 'nbits': 8}
 
-    data = da.tile(da.repeat(da.arange(4, chunks=1024) / 3.0, 256), 1024).reshape((1, 1024, 1024))
-    data = xr.DataArray(data, coords={'bands': ['L']}, dims=['bands', 'y', 'x'], attrs=attrs)
+    data = da.tile(da.repeat(da.arange(4, chunks=1024) /
+                             3.0, 256), 1024).reshape((1, 1024, 1024))
+    data = xr.DataArray(data, coords={'bands': ['L']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
     img = FakeImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
         filename = tmpfile.name
@@ -147,7 +153,8 @@ def test_write_bw_inverted_ir():
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
         res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256], np.array([65024, 43264, 21760, 0])))
+        assert(np.allclose(res[0, 0, ::256],
+                           np.array([65024, 43264, 21760, 0])))
 
 
 def test_write_bw_fill():
@@ -182,11 +189,14 @@ def test_write_bw_fill():
               'chan_id': 900015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': '%', 'nbits': 8}
 
-    data1 = da.tile(da.repeat(da.arange(4, chunks=1024) / 3.0, 256), 256).reshape((1, 256, 1024))
+    data1 = da.tile(da.repeat(da.arange(4, chunks=1024) /
+                              3.0, 256), 256).reshape((1, 256, 1024))
     datanan = da.ones((1, 256, 1024), chunks=1024) * np.nan
-    data2 = da.tile(da.repeat(da.arange(4, chunks=1024) / 3.0, 256), 512).reshape((1, 512, 1024))
+    data2 = da.tile(da.repeat(da.arange(4, chunks=1024) /
+                              3.0, 256), 512).reshape((1, 512, 1024))
     data = da.concatenate((data1, datanan, data2), axis=1)
-    data = xr.DataArray(data, coords={'bands': ['L']}, dims=['bands', 'y', 'x'], attrs=attrs)
+    data = xr.DataArray(data, coords={'bands': ['L']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
     img = FakeImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
         filename = tmpfile.name
@@ -195,7 +205,8 @@ def test_write_bw_fill():
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
         res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256], np.array([256, 22016, 43520, 65280])))
+        assert(np.allclose(res[0, 0, ::256],
+                           np.array([256, 22016, 43520, 65280])))
 
 
 def test_write_bw_inverted_ir_fill():
@@ -230,11 +241,14 @@ def test_write_bw_inverted_ir_fill():
               'chan_id': 900015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': 'C', 'nbits': 8}
 
-    data1 = da.tile(da.repeat(da.arange(4, chunks=1024) / 3.0, 256), 256).reshape((1, 256, 1024))
+    data1 = da.tile(da.repeat(da.arange(4, chunks=1024) /
+                              3.0, 256), 256).reshape((1, 256, 1024))
     datanan = da.ones((1, 256, 1024), chunks=1024) * np.nan
-    data2 = da.tile(da.repeat(da.arange(4, chunks=1024) / 3.0, 256), 512).reshape((1, 512, 1024))
+    data2 = da.tile(da.repeat(da.arange(4, chunks=1024) /
+                              3.0, 256), 512).reshape((1, 512, 1024))
     data = da.concatenate((data1, datanan, data2), axis=1)
-    data = xr.DataArray(data, coords={'bands': ['L']}, dims=['bands', 'y', 'x'], attrs=attrs)
+    data = xr.DataArray(data, coords={'bands': ['L']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
     img = FakeImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
         filename = tmpfile.name
@@ -243,7 +257,8 @@ def test_write_bw_inverted_ir_fill():
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
         res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256], np.array([65024, 43264, 21760, 0])))
+        assert(np.allclose(res[0, 0, ::256],
+                           np.array([65024, 43264, 21760, 0])))
 
 
 def test_write_rgb():
@@ -288,15 +303,16 @@ def test_write_rgb():
                   ('calibration', None),
                   ('modifiers', None),
                   ('mode', 'RGB'),
-                  ('enhancement_history', [{'scale': np.array([ 1,  1, -1]), 'offset': np.array([0, 0, 1])},
-                                           {'scale': np.array([0.0266347 , 0.03559078, 0.01329783]),
-                                            'offset': np.array([-0.02524969, -0.01996642,  3.8918446 ])},
+                  ('enhancement_history', [{'scale': np.array([1,  1, -1]), 'offset': np.array([0, 0, 1])},
+                                           {'scale': np.array([0.0266347, 0.03559078, 0.01329783]),
+                                            'offset': np.array([-0.02524969, -0.01996642,  3.8918446])},
                                            {'gamma': 1.6}])])
 
     kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
               'chan_id': 6500015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8}
     data = da.from_array(arr.clip(0, 1), chunks=1024)
-    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=['bands', 'y', 'x'], attrs=attrs)
+    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
 
     from trollimage.xrimage import XRImage
     img = XRImage(data)
@@ -309,7 +325,8 @@ def test_write_rgb():
         tif = TiffFile(filename)
         res = tif[0].asarray()
         for idx in range(3):
-            np.testing.assert_allclose(res[:, :, idx], np.round(arr[idx, :, :] * 255).astype(np.uint8))
+            np.testing.assert_allclose(res[:, :, idx], np.round(
+                arr[idx, :, :] * 255).astype(np.uint8))
 
 
 def test_write_rgb_with_a():
@@ -356,16 +373,17 @@ def test_write_rgb_with_a():
                   ('calibration', None),
                   ('modifiers', None),
                   ('mode', 'RGB'),
-                  ('enhancement_history', [{'scale': np.array([ 1,  1, -1]), 'offset': np.array([0, 0, 1])},
-                                           {'scale': np.array([0.0266347 , 0.03559078, 0.01329783]),
-                                            'offset': np.array([-0.02524969, -0.01996642,  3.8918446 ])},
+                  ('enhancement_history', [{'scale': np.array([1,  1, -1]), 'offset': np.array([0, 0, 1])},
+                                           {'scale': np.array([0.0266347, 0.03559078, 0.01329783]),
+                                            'offset': np.array([-0.02524969, -0.01996642,  3.8918446])},
                                            {'gamma': 1.6}])])
 
     kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
               'chan_id': 6500015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8}
     data = da.from_array(arr.clip(0, 1), chunks=1024)
 
-    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=['bands', 'y', 'x'], attrs=attrs)
+    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
     from trollimage.xrimage import XRImage
     img = XRImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
@@ -376,5 +394,6 @@ def test_write_rgb_with_a():
         tif = TiffFile(filename)
         res = tif[0].asarray()
         for idx in range(3):
-            np.testing.assert_allclose(res[:, :, idx], np.round(np.nan_to_num(arr[idx, :, :]) * 255).astype(np.uint8))
+            np.testing.assert_allclose(res[:, :, idx], np.round(
+                np.nan_to_num(arr[idx, :, :]) * 255).astype(np.uint8))
         np.testing.assert_allclose(res[:, :, 3] == 0, np.isnan(arr[0, :, :]))
