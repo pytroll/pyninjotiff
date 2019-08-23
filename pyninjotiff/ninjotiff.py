@@ -357,10 +357,9 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             # TODO: check what is the correct fill value for NinJo!
             if fill_value is not None:
                 log.debug("Forcing fill value to %s", fill_value)
-            data = img.finalize(dtype=dtype, fill_value=fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
-            data = data[0].to_masked_array()
+            data = img.data[0].to_masked_array()
 
         fill_value = fill_value if fill_value is not None else np.iinfo(
             dtype).min
@@ -380,26 +379,20 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 # value_range_measurement_unit[0] and 1.0 as
                 # value_range_measurement_unit[1]
 
-                # Make room for transparent pixel.
-                scale_fill_value = (
-                    (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
-                img = deepcopy(img)
-                img.channels[0] *= scale_fill_value
+                # Make room for the transparent pixel value.
+                data = data.clip(0, 1)
+                data *= (np.iinfo(dtype).max - 1)
+                data += 1
 
-                img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
-
-                channels, fill_value = img._finalize(dtype)
-                data = channels[0]
-
-                scale = ((value_range_measurement_unit[1] -
-                          value_range_measurement_unit[0]) /
-                         (np.iinfo(dtype).max))
+                scale = ((value_range_measurement_unit[1]
+                          - value_range_measurement_unit[0])
+                         / (np.iinfo(dtype).max - 1))
                 # Handle the case where all data has the same value.
                 scale = scale or 1
                 offset = value_range_measurement_unit[0]
 
                 mask = data.mask
-
+                data = np.round(data.data).astype(dtype)
                 offset -= scale
 
                 if fill_value is None:
@@ -446,20 +439,16 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                                                                 d__.max()))
                 del d__
 
-        if isinstance(img, np.ma.MaskedArray):
-            return data, scale, offset, fill_value
-        else:
-            # returns the data band
-            return data[0], scale, offset, fill_value
+        return data, scale, offset, fill_value
 
     elif img.mode == 'RGB':
         if isinstance(img, np.ma.MaskedArray):
             channels, fill_value = img._finalize(dtype)
         else:
-            data = img.finalize(dtype=dtype)
+            data, mode = img.finalize(fill_value=fill_value, dtype=dtype)
             # Go back to the masked_array for compatibility with
             # the rest of the code.
-            channels = data[0].to_masked_array()
+            channels = data.to_masked_array()
             # Is this fill_value ok or what should it be?
             fill_value = (0, 0, 0, 0)
 
@@ -503,7 +492,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                          str(img.mode))
 
 
-def save(img, filename, ninjo_product_name=None, writer_options=None,
+def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_scaled_01=True,
          **kwargs):
     """Ninjo TIFF writer.
 
@@ -545,14 +534,11 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
     if 'fill_value' in kwargs and kwargs['fill_value'] != None:
         fill_value = int(kwargs['fill_value'])
 
-
     try:
         value_range_measurement_unit = (float(kwargs["ch_min_measurement_unit"]),
                                         float(kwargs["ch_max_measurement_unit"]))
     except KeyError:
         value_range_measurement_unit = None
-
-    data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
     # In case we are working on a trollimage.xrimage.XRImage,
     # a conversion to the previously used masked_array is needed
