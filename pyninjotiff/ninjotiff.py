@@ -353,8 +353,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         # PFE: mpop.satout.cfscene
         if isinstance(img, np.ma.MaskedArray):
             data = img.channels[0]
-        else :
-            # TODO: check what is the corret fill value for NinJo!
+        else:
+            # TODO: check what is the correct fill value for NinJo!
             if fill_value is not None:
                 log.debug("Forcing fill value to %s", fill_value)
             data = img.finalize(dtype=dtype, fill_value=fill_value)
@@ -529,7 +529,6 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
         * min value will be reserved for transparent color.
         * If possible mpop.imageo.image's standard finalize will be used.
     """
-
     if writer_options:
         # add writer_options
         kwargs.update(writer_options)
@@ -567,7 +566,7 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
     if isinstance(img, np.ma.MaskedArray):
         area_def = img.info['area']
         time_slot = img.info['start_time']
-    else :
+    else:
         area_def = img.data.area
         time_slot = img.data.start_time
 
@@ -587,7 +586,6 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
             g += [0] * (256 - len(g))
             b += [0] * (256 - len(b))
         kwargs['cmap'] = r, g, b
-
     write(data, filename, area_def, ninjo_product_name, **kwargs)
 
 
