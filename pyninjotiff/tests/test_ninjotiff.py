@@ -90,7 +90,7 @@ def test_write_bw():
     kwargs = {'ch_min_measurement_unit': np.array([0]),
               'ch_max_measurement_unit': np.array([120]),
               'compute': True, 'fill_value': None, 'sat_id': 6300014,
-              'chan_id': 900015, 'data_cat': 'PORN', 'data_source': 'SMHI',
+              'chan_id': 100015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': '%', 'nbits': 8}
 
     data = da.tile(da.repeat(da.arange(4, chunks=1024) /
@@ -186,7 +186,7 @@ def test_write_bw_fill():
     kwargs = {'ch_min_measurement_unit': np.array([0]),
               'ch_max_measurement_unit': np.array([120]),
               'compute': True, 'fill_value': None, 'sat_id': 6300014,
-              'chan_id': 900015, 'data_cat': 'PORN', 'data_source': 'SMHI',
+              'chan_id': 100015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': '%', 'nbits': 8}
 
     data1 = da.tile(da.repeat(da.arange(4, chunks=1024) /
