@@ -413,12 +413,6 @@ def test_write_rgb_classified():
     x_size, y_size = 1024, 1024
     arr = np.zeros((3, y_size, x_size))
 
-    data1 = da.tile(da.repeat(da.arange(4, chunks=1024), 256), 256).reshape((1, 256, 1024))
-    datanan = da.ones((1, 256, 1024), chunks=1024) * 4
-    data2 = da.tile(da.repeat(da.arange(4, chunks=1024), 256), 512).reshape((1, 512, 1024))
-    data = da.concatenate((data1, datanan, data2), axis=1)
-    data = xr.DataArray(data, coords={'bands': ['L']}, dims=['bands', 'y', 'x'], attrs=attrs)
-
     attrs = dict([('platform_name', 'NOAA-18'),
                   ('resolution', 1050),
                   ('polarization', None),
@@ -440,10 +434,13 @@ def test_write_rgb_classified():
 
     kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
               'chan_id': 1700015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8}
-    data = da.from_array(arr.clip(0, 1), chunks=1024)
 
-    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
-                        'bands', 'y', 'x'], attrs=attrs)
+    data1 = da.tile(da.repeat(da.arange(4, chunks=1024), 256), 256).reshape((1, 256, 1024))
+    datanan = da.ones((1, 256, 1024), chunks=1024) * 4
+    data2 = da.tile(da.repeat(da.arange(4, chunks=1024), 256), 512).reshape((1, 512, 1024))
+    data = da.concatenate((data1, datanan, data2), axis=1)
+    data = xr.DataArray(data, coords={'bands': ['P']}, dims=['bands', 'y', 'x'], attrs=attrs)
+
     from trollimage.xrimage import XRImage
     img = XRImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
