@@ -28,6 +28,7 @@ import tempfile
 import xarray as xr
 import dask.array as da
 import colorsys
+import pytest
 
 TIME = datetime.datetime.utcnow()
 DELETE_FILES = True
@@ -380,6 +381,65 @@ def test_write_rgb_with_a():
 
     kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
               'chan_id': 6500015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8}
+    data = da.from_array(arr.clip(0, 1), chunks=1024)
+
+    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
+    from trollimage.xrimage import XRImage
+    img = XRImage(data)
+    with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
+        filename = tmpfile.name
+        if not DELETE_FILES:
+            print(filename)
+        save(img, filename, data_is_scaled_01=True, **kwargs)
+        tif = TiffFile(filename)
+        res = tif[0].asarray()
+        for idx in range(3):
+            np.testing.assert_allclose(res[:, :, idx], np.round(
+                np.nan_to_num(arr[idx, :, :]) * 255).astype(np.uint8))
+        np.testing.assert_allclose(res[:, :, 3] == 0, np.isnan(arr[0, :, :]))
+
+
+@pytest.mark.skip(reason="this is no implemented yet.")
+def test_write_rgb_classified():
+    """Test saving a transparent RGB."""
+    from pyninjotiff.ninjotiff import save
+    from pyninjotiff.tifffile import TiffFile
+
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
+                    1024, 1024)
+
+    x_size, y_size = 1024, 1024
+    arr = np.zeros((3, y_size, x_size))
+
+    data1 = da.tile(da.repeat(da.arange(4, chunks=1024), 256), 256).reshape((1, 256, 1024))
+    datanan = da.ones((1, 256, 1024), chunks=1024) * 4
+    data2 = da.tile(da.repeat(da.arange(4, chunks=1024), 256), 512).reshape((1, 512, 1024))
+    data = da.concatenate((data1, datanan, data2), axis=1)
+    data = xr.DataArray(data, coords={'bands': ['L']}, dims=['bands', 'y', 'x'], attrs=attrs)
+
+    attrs = dict([('platform_name', 'NOAA-18'),
+                  ('resolution', 1050),
+                  ('polarization', None),
+                  ('start_time', TIME - datetime.timedelta(minutes=55)),
+                  ('end_time', TIME - datetime.timedelta(minutes=50)),
+                  ('level', None),
+                  ('sensor', 'avhrr-3'),
+                  ('ancillary_variables', []),
+                  ('area', area),
+                  ('wavelength', None),
+                  ('optional_datasets', []),
+                  ('standard_name', 'overview'),
+                  ('name', 'overview'),
+                  ('prerequisites', [0.6, 0.8, 10.8]),
+                  ('optional_prerequisites', []),
+                  ('calibration', None),
+                  ('modifiers', None),
+                  ('mode', 'P')])
+
+    kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
+              'chan_id': 1700015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8}
     data = da.from_array(arr.clip(0, 1), chunks=1024)
 
     data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
