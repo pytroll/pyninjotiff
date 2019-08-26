@@ -359,10 +359,15 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 log.debug("Forcing fill value to %s", fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
-            data = img.data[0].to_masked_array()
+            if (np.issubdtype(img.data[0].dtype, np.integer)
+                    and '_FillValue' in img.data[0].attrs):
+                nodata_value = img.data[0].attrs['_FillValue']
+                data = img.data[0].values
+                data = np.ma.array(data, mask=(data == nodata_value))
+            else:
+                data = img.data[0].to_masked_array()
 
-        fill_value = fill_value if fill_value is not None else np.iinfo(
-            dtype).min
+        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
