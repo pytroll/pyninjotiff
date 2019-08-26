@@ -67,7 +67,7 @@ def test_write_bw():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
     scale = 1.0 / 120
@@ -115,7 +115,7 @@ def test_write_bw_inverted_ir():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
     scale = 1.0 / 120
@@ -163,7 +163,7 @@ def test_write_bw_fill():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
     scale = 1.0 / 120
@@ -215,7 +215,7 @@ def test_write_bw_inverted_ir_fill():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
     scale = 1.0 / 120
@@ -267,7 +267,7 @@ def test_write_rgb():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
 
@@ -335,7 +335,7 @@ def test_write_rgb_with_a():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
 
@@ -406,7 +406,7 @@ def test_write_rgb_classified():
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
 
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': '90.0', 'lat_ts': '60.0', 'lon_0': '0.0', 'proj': 'stere'},
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
                     (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
                     1024, 1024)
 
