@@ -337,7 +337,7 @@ class TiffWriter(object):
 
     def save(self, data, photometric=None, planarconfig=None, resolution=None,
              description=None, volume=False, writeshape=False, compress=0,
-             colormap=None, extrasamples_type=1, tile_width=None, 
+             colormap=None, extrasamples_type=1, tile_width=None,
              tile_length=None, extratags=()):
         """Write image data to TIFF file.
 
@@ -4989,4 +4989,3 @@ if sys.version_info[0] > 2:
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -353,16 +353,21 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         # PFE: mpop.satout.cfscene
         if isinstance(img, np.ma.MaskedArray):
             data = img.channels[0]
-        else :
-            # TODO: check what is the corret fill value for NinJo!
+        else:
+            # TODO: check what is the correct fill value for NinJo!
             if fill_value is not None:
                 log.debug("Forcing fill value to %s", fill_value)
-            data = img.finalize(dtype=dtype, fill_value=fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
-            data = data[0].to_masked_array()
+            if (np.issubdtype(img.data[0].dtype, np.integer)
+                    and '_FillValue' in img.data[0].attrs):
+                nodata_value = img.data[0].attrs['_FillValue']
+                data = img.data[0].values
+                data = np.ma.array(data, mask=(data == nodata_value))
+            else:
+                data = img.data[0].to_masked_array()
 
-        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min 
+        fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
 
         log.debug("Before scaling: %.2f, %.2f, %.2f" %
                   (data.min(), data.mean(), data.max()))
@@ -379,26 +384,20 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 # value_range_measurement_unit[0] and 1.0 as
                 # value_range_measurement_unit[1]
 
-                # Make room for transparent pixel.
-                scale_fill_value = (
-                    (np.iinfo(dtype).max) / (np.iinfo(dtype).max + 1.0))
-                img = deepcopy(img)
-                img.channels[0] *= scale_fill_value
+                # Make room for the transparent pixel value.
+                data = data.clip(0, 1)
+                data *= (np.iinfo(dtype).max - 1)
+                data += 1
 
-                img.channels[0] += 1 / (np.iinfo(dtype).max + 1.0)
-
-                channels, fill_value = img._finalize(dtype)
-                data = channels[0]
-
-                scale = ((value_range_measurement_unit[1] -
-                          value_range_measurement_unit[0]) /
-                         (np.iinfo(dtype).max))
+                scale = ((value_range_measurement_unit[1]
+                          - value_range_measurement_unit[0])
+                         / (np.iinfo(dtype).max - 1))
                 # Handle the case where all data has the same value.
                 scale = scale or 1
                 offset = value_range_measurement_unit[0]
 
                 mask = data.mask
-
+                data = np.round(data.data).astype(dtype)
                 offset -= scale
 
                 if fill_value is None:
@@ -445,23 +444,19 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                                                                 d__.max()))
                 del d__
 
-        if isinstance(img, np.ma.MaskedArray):
-            return data, scale, offset, fill_value
-        else:
-            # returns the data band
-            return data[0], scale, offset, fill_value
+        return data, scale, offset, fill_value
 
     elif img.mode == 'RGB':
         if isinstance(img, np.ma.MaskedArray):
             channels, fill_value = img._finalize(dtype)
         else:
-            data = img.finalize(dtype=dtype)
+            data, mode = img.finalize(fill_value=fill_value, dtype=dtype)
             # Go back to the masked_array for compatibility with
             # the rest of the code.
-            channels = data[0].to_masked_array()
+            channels = data.to_masked_array()
             # Is this fill_value ok or what should it be?
             fill_value = (0, 0, 0, 0)
- 
+
         if isinstance(img, np.ma.MaskedArray) and fill_value is None:
             mask = (np.ma.getmaskarray(channels[0]) &
                     np.ma.getmaskarray(channels[1]) &
@@ -502,7 +497,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                          str(img.mode))
 
 
-def save(img, filename, ninjo_product_name=None, writer_options=None,
+def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_scaled_01=True,
          **kwargs):
     """Ninjo TIFF writer.
 
@@ -528,7 +523,6 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
         * min value will be reserved for transparent color.
         * If possible mpop.imageo.image's standard finalize will be used.
     """
-
     if writer_options:
         # add writer_options
         kwargs.update(writer_options)
@@ -545,14 +539,11 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
     if 'fill_value' in kwargs and kwargs['fill_value'] != None:
         fill_value = int(kwargs['fill_value'])
 
-
     try:
         value_range_measurement_unit = (float(kwargs["ch_min_measurement_unit"]),
                                         float(kwargs["ch_max_measurement_unit"]))
     except KeyError:
         value_range_measurement_unit = None
-
-    data_is_scaled_01 = bool(kwargs.get("data_is_scaled_01", True))
 
     # In case we are working on a trollimage.xrimage.XRImage,
     # a conversion to the previously used masked_array is needed
@@ -566,7 +557,7 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
     if isinstance(img, np.ma.MaskedArray):
         area_def = img.info['area']
         time_slot = img.info['start_time']
-    else :
+    else:
         area_def = img.data.area
         time_slot = img.data.start_time
 
@@ -586,14 +577,13 @@ def save(img, filename, ninjo_product_name=None, writer_options=None,
             g += [0] * (256 - len(g))
             b += [0] * (256 - len(b))
         kwargs['cmap'] = r, g, b
-
     write(data, filename, area_def, ninjo_product_name, **kwargs)
 
 
 def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     """Generic Ninjo TIFF writer.
 
-    If 'prodcut_name' is given, it will load corresponding Ninjo tiff metadata
+    If 'product_name' is given, it will load corresponding Ninjo tiff metadata
     from '${PPP_CONFIG_DIR}/ninjotiff.cfg'. Else, all Ninjo tiff metadata should
     be passed by '**kwargs'. A mixture is allowed, where passed arguments
     overwrite config file.
@@ -612,9 +602,7 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs : dict
             See _write
     """
-    
-
-    proj  = Proj(area_def.proj_dict) 
+    proj = Proj(area_def.proj_dict)
     upper_left = proj(
         area_def.area_extent[0],
         area_def.area_extent[3],
@@ -622,8 +610,8 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     lower_right = proj(
         area_def.area_extent[2],
         area_def.area_extent[1],
-        inverse=True)    
- 
+        inverse=True)
+
     if len(image_data.shape) == 3:
         if image_data.shape[2] == 4:
             shape = (area_def.y_size, area_def.x_size, 4)
@@ -686,9 +674,8 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
             options['ref_lat2'] = 0
     if 'lon_0' in area_def.proj_dict:
         options['central_meridian'] = area_def.proj_dict['lon_0']
-	
 
-    a,b = proj4_radius_parameters(area_def.proj_dict)
+    a, b = proj4_radius_parameters(area_def.proj_dict)
     options['radius_a'] = a
     options['radius_b'] = b
     options['origin_lon'] = upper_left[0]
@@ -1152,9 +1139,9 @@ if __name__ == '__main__':
     try:
         filename = args[0]
     except IndexError:
-        print >> sys.stderr, """usage: python ninjotiff.py [<-p page-number>] [-c] <ninjotiff-filename>
+        print("""usage: python ninjotiff.py [<-p page-number>] [-c] <ninjotiff-filename>
     -p <page-number>: print page number (default are all pages).
-    -c: print color maps (default is not to print color maps)."""
+    -c: print color maps (default is not to print color maps).""", sys.stderr)
         sys.exit(2)
 
     pages = read_tags(filename)
@@ -1162,12 +1149,12 @@ if __name__ == '__main__':
         try:
             pages = [pages[page_no]]
         except IndexError:
-            print >>sys.stderr, "Invalid page number '%d'" % page_no
+            print("Invalid page number '%d'" % page_no, sys.stderr)
             sys.exit(2)
     for page in pages:
         names = sorted(page.keys())
-        print ""
+        print("")
         for name in names:
             if not print_color_maps and name == "color_map":
                 continue
-            print name, page[name]
+            print(name, page[name])
