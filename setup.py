@@ -44,6 +44,6 @@ setup(name="pyninjotiff",
       url="https://github.com/pytroll/pyninjotiff",
       packages=['pyninjotiff'],
       zip_safe=False,
-      install_requires=['numpy >=1.6', 'six'],
+      install_requires=['numpy >=1.6', 'six', 'pyproj', 'pyresample'],
       # test_suite='pyninjotiff.tests.suite',
       )
