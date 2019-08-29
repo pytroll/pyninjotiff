@@ -202,12 +202,14 @@ class ProductConfigs(object):
         return sorted(self._products.keys())
 
     def read_config(self, config_filename=None):
-        from ConfigParser import ConfigParser
+        """Read the ninjo products config file."""
+        from six.moves.configparser import RawConfigParser
+        import ast
 
         def _eval(val):
             try:
-                return eval(val)
-            except:
+                return ast.literal_eval(val)
+            except (ValueError, SyntaxError):
                 return str(val)
 
         if config_filename is not None:
@@ -216,14 +218,14 @@ class ProductConfigs(object):
             filename = self._find_a_config_file('ninjotiff_products.cfg')
         log.info("Reading Ninjo config file: '%s'" % filename)
 
-        cfg = ConfigParser()
+        cfg = RawConfigParser()
         products = {}
         if filename is not None:
             cfg.read(filename)
             for sec in cfg.sections():
                 prd = {}
                 for key, val in cfg.items(sec):
-                   prd[key] = _eval(val)
+                    prd[key] = _eval(val)
                 products[sec] = prd
         self._products = products
 
