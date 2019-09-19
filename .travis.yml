@@ -6,7 +6,7 @@ python:
 
 install:
   - pip install codecov pytest pytest-cov trollimage xarray dask[array]
-  - pip install .
+  - pip install -e .
 
 script:
   - pytest --cov=./

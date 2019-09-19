@@ -1,39 +1,38 @@
 # -*- coding: utf-8 -*-
-"""
-ninjotiff.py
-
-Created on Mon Apr 15 13:41:55 2013
-
-A big amount of the tiff writer are (PFE) from
-https://github.com/davidh-ssec/polar2grid by David Hoese
-
-License:
-Copyright (C) 2013 Space Science and Engineering Center (SSEC),
- University of Wisconsin-Madison.
- Lars Ørum Rasmussen, DMI.
-
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-Original scripts and automation included as part of this package are
-distributed under the GNU GENERAL PUBLIC LICENSE agreement version 3.
-Binary executable files included as part of this software package are
-copyrighted and licensed by their respective organizations, and
-distributed consistent with their licensing terms.
-
-Edited by Christian Kliche (Ernst Basler + Partner) to replace pylibtiff with
-a modified version of tifffile.py (created by Christoph Gohlke)
-"""
+# ninjotiff.py
+#
+# Created on Mon Apr 15 13:41:55 2013
+#
+# A big amount of the tiff writer are (PFE) from
+# https://github.com/davidh-ssec/polar2grid by David Hoese
+#
+# License:
+# Copyright (C) 2013 Space Science and Engineering Center (SSEC),
+#  University of Wisconsin-Madison.
+#  Lars Ørum Rasmussen, DMI.
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Original scripts and automation included as part of this package are
+# distributed under the GNU GENERAL PUBLIC LICENSE agreement version 3.
+# Binary executable files included as part of this software package are
+# copyrighted and licensed by their respective organizations, and
+# distributed consistent with their licensing terms.
+#
+# Edited by Christian Kliche (Ernst Basler + Partner) to replace pylibtiff with
+# a modified version of tifffile.py (created by Christoph Gohlke)
+"""Ninjotiff writing utility."""
 
 import calendar
 import logging
@@ -46,18 +45,16 @@ import numpy as np
 from pyproj import Proj
 from pyresample.utils import proj4_radius_parameters
 
-#import mpop.imageo.formats.writer_options as write_opts
 from pyninjotiff import tifffile
-import trollimage
 
 log = logging.getLogger(__name__)
 
 
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 #
 # Ninjo tiff tags from DWD
 #
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 # Geotiff tags.
 GTF_ModelPixelScale = 33550
 GTF_ModelTiepoint = 33922
@@ -125,13 +122,13 @@ MODEL_PIXEL_SCALE_COUNT = int(os.environ.get(
     "GEOTIFF_MODEL_PIXEL_SCALE_COUNT", 3))
 
 
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 #
 # Read Ninjo products config file.
 #
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 def get_writer_config(config_fname, prod, single_product_config, scn_metadata):
-    """Writer_config function for Trollflow_sat: calls the get_product_config function
+    """Writer_config function for Trollflow_sat: calls the get_product_config function.
 
     :Parameters:
        config_fname: str
@@ -150,6 +147,7 @@ def get_writer_config(config_fname, prod, single_product_config, scn_metadata):
     if 'ninjo_product_name' in single_product_config:
         ninjo_product = single_product_config['ninjo_product_name']
     return get_product_config(ninjo_product, True, config_fname)
+
 
 def get_product_config(product_name, force_read=False, config_filename=None):
     """Read Ninjo configuration entry for a given product name.
@@ -173,23 +171,29 @@ def get_product_config(product_name, force_read=False, config_filename=None):
 
 class _Singleton(type):
 
-    def __init__(cls, name_, bases_, dict_):
-        super(_Singleton, cls).__init__(name_, bases_, dict_)
-        cls.instance = None
+    def __init__(self, name_, bases_, dict_):
+        """Init the singleton."""
+        super(_Singleton, self).__init__(name_, bases_, dict_)
+        self.instance = None
 
-    def __call__(cls, *args, **kwargs):
-        if cls.instance is None:
-            cls.instance = super(_Singleton, cls).__call__(*args, **kwargs)
-        return cls.instance
+    def __call__(self, *args, **kwargs):
+        """Call the singleton."""
+        if self.instance is None:
+            self.instance = super(_Singleton, self).__call__(*args, **kwargs)
+        return self.instance
 
 
 class ProductConfigs(object):
-    __metaclass__ = _Singleton
+    """Product config."""
+
+    __metaclass__ = _Singleton  # noqa
 
     def __init__(self):
+        """Init the product config."""
         self.read_config()
 
     def __call__(self, product_name, force_read=False, config_filename=None):
+        """Call the product config."""
         if force_read:
             self.read_config(config_filename)
         if product_name in self._products:
@@ -199,6 +203,7 @@ class ProductConfigs(object):
 
     @property
     def product_names(self):
+        """Get the product names."""
         return sorted(self._products.keys())
 
     def read_config(self, config_filename=None):
@@ -231,8 +236,9 @@ class ProductConfigs(object):
 
     @staticmethod
     def _find_a_config_file(fname):
-        # if config file (fname) is not found as absolute path: look for the config file in the PPP_CONFIG_DIR or current dir
-        name_ = fname
+        # if config file (fname) is not found as absolute path: look for the
+        # config file in the PPP_CONFIG_DIR or current dir
+        name_ = os.path.abspath(os.path.expanduser(fname))
         if os.path.isfile(name_):
             return name_
         else:
@@ -241,14 +247,14 @@ class ProductConfigs(object):
             for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
                 if os.path.isfile(fname_):
                     return fname_
-        #raise ValueError("Could not find a Ninjo tiff config file")
+        # raise ValueError("Could not find a Ninjo tiff config file")
 
 
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 #
 # Write Ninjo Products
 #
-#-------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 def _get_physic_value(physic_unit):
     # return Ninjo's physics unit and value.
     if physic_unit.upper() in ('K', 'KELVIN'):
@@ -319,8 +325,9 @@ def _get_satellite_altitude(filename):
 
 def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
               data_is_scaled_01=True, fill_value=None):
-    """Finalize a mpop GeoImage for Ninjo. Specialy take care of phycical scale
-    and offset.
+    """Finalize a mpop GeoImage for Ninjo.
+
+    Specialy take care of phycical scale and offset.
 
     :Parameters:
         img : mpop.imageo.img.GeoImage
@@ -350,7 +357,6 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         Only the 'L' and 'RGB' cases are compatible with xarray.XRImage.
         They still have to  be tested thoroughly.
     """
-
     if img.mode == 'L':
         # PFE: mpop.satout.cfscene
         if isinstance(img, np.ma.MaskedArray):
@@ -538,7 +544,7 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
             dtype = np.uint16
 
     fill_value = None
-    if 'fill_value' in kwargs and kwargs['fill_value'] != None:
+    if 'fill_value' in kwargs and kwargs['fill_value'] is not None:
         fill_value = int(kwargs['fill_value'])
 
     try:
@@ -583,7 +589,7 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
 
 
 def write(image_data, output_fn, area_def, product_name=None, **kwargs):
-    """Generic Ninjo TIFF writer.
+    """Write a Generic Ninjo TIFF.
 
     If 'product_name' is given, it will load corresponding Ninjo tiff metadata
     from '${PPP_CONFIG_DIR}/ninjotiff.cfg'. Else, all Ninjo tiff metadata should
@@ -695,11 +701,12 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
 #
 # -----------------------------------------------------------------------------
 def _write(image_data, output_fn, write_rgb=False, **kwargs):
-    """Proudly Found Elsewhere (PFE) https://github.com/davidh-ssec/polar2grid
+    """Create a NinJo compatible TIFF file.
+
+    Proudly Found Elsewhere (PFE) https://github.com/davidh-ssec/polar2grid
     by David Hoese.
 
-    Create a NinJo compatible TIFF file with the tags used
-    by the DWD's version of NinJo.  Also stores the image as tiles on disk
+    Also stores the image as tiles on disk
     and creates a multi-resolution/pyramid/overview set of images
     (deresolution: 2,4,8,16).
 
@@ -1125,6 +1132,7 @@ def read_tags(filename):
                 tags[name] = value
             pages.append(tags)
     return pages
+
 
 if __name__ == '__main__':
     import sys
