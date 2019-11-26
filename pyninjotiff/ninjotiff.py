@@ -892,7 +892,12 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
             reverse = False
         if np.iinfo(image_data.dtype).bits == 8:
             # Always generate colormap for 8 bit gray scale.
-            cmap = _default_colormap(reverse)
+            cmap = kwargs.get("color_map", None)
+            if cmap is not None:
+                #cmap = [x * 256 for x in cmap] * 3
+                cmap = [cmap] * 3
+            else:
+                cmap = _default_colormap(reverse)
         elif reverse:
             # No colormap for 16 bit gray scale, but for IR, specify white is
             # minimum.
