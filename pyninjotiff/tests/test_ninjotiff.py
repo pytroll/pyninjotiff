@@ -112,9 +112,12 @@ def test_write_bw():
             print(filename)
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
-        res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256],
-                           np.array([256, 22016, 43520, 65280])))
+        page = tif[0]
+        res = page.asarray(colormapped=False).squeeze()
+        colormap = page.tags['color_map'].value
+        for i in range(3):
+            assert(np.all(np.array(colormap[i * 256:(i + 1) * 256]) == np.arange(256) * 256))
+        assert(np.all(res[0, ::256] == np.array([1,  86, 170, 255])))
 
 
 def test_write_bw_inverted_ir():
@@ -160,9 +163,12 @@ def test_write_bw_inverted_ir():
             print(filename)
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
-        res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256],
-                           np.array([65024, 43264, 21760, 0])))
+        page = tif[0]
+        res = page.asarray(colormapped=False).squeeze()
+        colormap = page.tags['color_map'].value
+        for i in range(3):
+            assert(np.all(np.array(colormap[i * 256:(i + 1) * 256]) == np.arange(255, -1, -1) * 256))
+        assert(np.all(res[0, ::256] == np.array([1,  86, 170, 255])))
 
 
 def test_write_bw_fill():
@@ -212,9 +218,13 @@ def test_write_bw_fill():
             print(filename)
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
-        res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256],
-                           np.array([256, 22016, 43520, 65280])))
+        page = tif[0]
+        res = page.asarray(colormapped=False).squeeze()
+        colormap = page.tags['color_map'].value
+        for i in range(3):
+            assert(np.all(np.array(colormap[i * 256:(i + 1) * 256]) == np.arange(256) * 256))
+        assert(np.all(res[0, ::256] == np.array([1,  86, 170, 255])))
+        assert(np.all(res[256, :] == 0))
 
 
 def test_write_bw_inverted_ir_fill():
@@ -264,9 +274,13 @@ def test_write_bw_inverted_ir_fill():
             print(filename)
         save(img, filename, data_is_scaled_01=True, **kwargs)
         tif = TiffFile(filename)
-        res = tif[0].asarray()
-        assert(np.allclose(res[0, 0, ::256],
-                           np.array([65024, 43264, 21760, 0])))
+        page = tif[0]
+        res = page.asarray(colormapped=False).squeeze()
+        colormap = page.tags['color_map'].value
+        for i in range(3):
+            assert(np.all(np.array(colormap[i * 256:(i + 1) * 256]) == np.arange(255, -1, -1) * 256))
+        assert(np.all(res[0, ::256] == np.array([1,  86, 170, 255])))
+        assert(np.all(res[256, :] == 0))
 
 
 def test_write_rgb():
@@ -467,6 +481,8 @@ def test_write_bw_colormap():
     """Test saving a BW image with a colormap.
 
     Albedo with a colormap.
+
+    Reflectances are 0, 29.76, 60, 90.24, 120.
     """
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
@@ -551,6 +567,8 @@ def test_write_ir_colormap():
     """Test saving a IR image with a colormap.
 
     IR with a colormap.
+
+    Temperatures are -70, -40.24, -10, 20.24, 50.
     """
     from pyninjotiff.ninjotiff import save
     from pyninjotiff.tifffile import TiffFile
