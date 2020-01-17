@@ -45,7 +45,7 @@ import numpy as np
 from pyproj import Proj
 from pyresample.utils import proj4_radius_parameters
 
-from pyninjotiff import tifffile
+from pyninjotiff import tifffile as local_tifffile
 
 log = logging.getLogger(__name__)
 
@@ -1083,8 +1083,7 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     if 'bigtiff' not in tifargs and \
             image_data.size * image_data.dtype.itemsize > 2000 * 2 ** 20:
         tifargs['bigtiff'] = True
-
-    with tifffile.TiffWriter(output_fn, **tifargs) as tif:
+    with local_tifffile.TiffWriter(output_fn, **tifargs) as tif:
         tif.save(image_data, **args)
         for _, scale in enumerate((2, 4, 8, 16)):
             shape = (image_data.shape[0] / scale,
@@ -1116,7 +1115,7 @@ def read_tags(filename):
         A list tags, one tag dictionary per page.
     """
     pages = []
-    with tifffile.TiffFile(filename) as tif:
+    with local_tifffile.TiffFile(filename) as tif:
         for page in tif:
             tags = {}
             for tag in page.tags.values():

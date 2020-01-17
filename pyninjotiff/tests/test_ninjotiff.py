@@ -421,6 +421,150 @@ def test_write_rgb_with_a():
         np.testing.assert_allclose(res[:, :, 3] == 0, np.isnan(arr[0, :, :]))
 
 
+def test_write_rgb_tb():
+    """Test saving a non-trasparent RGB with thumbnails."""
+    from pyninjotiff.ninjotiff import save
+    from pyninjotiff.tifffile import TiffFile
+
+    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
+                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
+                    1024, 1024)
+
+    x_size, y_size = 1024, 1024
+    arr = np.zeros((3, y_size, x_size))
+    radius = min(x_size, y_size) / 2.0
+    centre = x_size / 2, y_size / 2
+
+    for x in range(x_size):
+        for y in range(y_size):
+            rx = x - centre[0]
+            ry = y - centre[1]
+            s = ((x - centre[0])**2.0 + (y - centre[1])**2.0)**0.5 / radius
+            if s <= 1.0:
+                h = ((np.arctan2(ry, rx) / np.pi) + 1.0) / 2.0
+                rgb = colorsys.hsv_to_rgb(h, s, 1.0)
+                arr[:, y, x] = np.array(rgb)
+
+    attrs = dict([('platform_name', 'NOAA-18'),
+                  ('resolution', 1050),
+                  ('polarization', None),
+                  ('level', None),
+                  ('sensor', 'avhrr-3'),
+                  ('ancillary_variables', []),
+                  ('area', area),
+                  ('start_time', TIME - datetime.timedelta(minutes=45)),
+                  ('end_time', TIME - datetime.timedelta(minutes=40)),
+                  ('wavelength', None),
+                  ('optional_datasets', []),
+                  ('standard_name', 'overview'),
+                  ('name', 'overview'),
+                  ('prerequisites', [0.6, 0.8, 10.8]),
+                  ('optional_prerequisites', []),
+                  ('calibration', None),
+                  ('modifiers', None),
+                  ('mode', 'RGB'),
+                  ('enhancement_history', [{'scale': np.array([1,  1, -1]), 'offset': np.array([0, 0, 1])},
+                                           {'scale': np.array([0.0266347, 0.03559078, 0.01329783]),
+                                            'offset': np.array([-0.02524969, -0.01996642,  3.8918446])},
+                                           {'gamma': 1.6}])])
+
+    kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
+              'chan_id': 6500015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8,
+              'tile_length': 256, 'tile_width': 256}
+    data = da.from_array(arr.clip(0, 1), chunks=1024)
+    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
+
+    from trollimage.xrimage import XRImage
+    img = XRImage(data)
+
+    with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
+        filename = tmpfile.name
+        if not DELETE_FILES:
+            print(filename)
+        save(img, filename, data_is_scaled_01=False, **kwargs)
+        tif = TiffFile(filename)
+        res = tif[0].asarray()
+        assert(tif.pages[0].tags['tile_length'].value == 256)
+        assert(tif.pages[1].tags['tile_length'].value == 256)
+        assert(tif.pages[0].tags['tile_width'].value == 256)
+        assert(tif.pages[1].tags['tile_width'].value == 256)
+        assert(len(tif.pages) == 2)
+        assert(tif.pages[0].shape == (1024, 1024, 4))
+        assert(tif.pages[1].shape == (512, 512, 4))
+        for idx in range(3):
+            np.testing.assert_allclose(res[:, :, idx], np.round(
+                arr[idx, :, :] * 255).astype(np.uint8))
+
+        tags = {'new_subfile_type': 0,
+                'image_width': 1024,
+                'image_length': 1024,
+                'bits_per_sample': (8, 8, 8, 8),
+                'compression': 32946,
+                'photometric': 2,
+                'orientation': 1,
+                'samples_per_pixel': 4,
+                'planar_configuration': 1,
+                'software': b'tifffile/pytroll',
+                'datetime': b'2020:01:17 14:17:23',
+                'tile_width': 256,
+                'tile_length': 256,
+                'tile_offsets': (951, 24414, 77352, 126135, 141546, 206260, 272951, 318709, 349650, 413166, 475735,
+                                 519168, 547960, 570326, 615924, 666705),
+                'tile_byte_counts': (23463, 52938, 48783, 15411, 64714, 66691, 45758, 30941, 63516, 62569, 43433, 28792,
+                                     22366, 45598, 50781, 13371),
+                'extra_samples': 2,
+                'sample_format': (1, 1, 1, 1),
+                'model_pixel_scale': (0.026949458523585643, 0.027040118922685666, 0.0),
+                'model_tie_point': (0.0, 0.0, 0.0, -35.00279008179894, 73.3850622630575, 0.0),
+                '40000': b'NINJO',
+                '40001': 6300014,
+                '40002': 1579264321,
+                '40003': 1579267043,
+                '40004': 6500015,
+                '40005': 2,
+                '40006': b'/tmp/tmpb4kn93qt',
+                '40007': b'PPRN',
+                '40008': b'',
+                '40009': 24,
+                '40010': b'SMHI',
+                '40011': 1,
+                '40012': 1024,
+                '40013': 1,
+                '40014': 1024,
+                '40015': b'NPOL',
+                '40016': -35.00278854370117,
+                '40017': 24.72344398498535,
+                '40018': 6378137.0,
+                '40019': 6356752.5,
+                '40021': 60.0,
+                '40022': 0.0,
+                '40023': 0.0,
+                '40024': b'None',
+                '40025': b'None',
+                '40026': 0,
+                '40027': 255,
+                '40028': 1.0,
+                '40029': 0.0,
+                '40040': 0,
+                '40041': 0,
+                '40042': 1,
+                '40043': 0,
+                '50000': 0,
+                'fill_order': 1,
+                'rows_per_strip': 4294967295,
+                'resolution_unit': 2,
+                'predictor': 1,
+                'ycbcr_subsampling': 1,
+                'ycbcr_positioning': 1}
+        read_tags = tif.pages[0].tags
+        assert(read_tags.keys() == tags.keys())
+        for key, val in tags.items():
+            if key in ['datetime', '40002', '40003', '40006']:
+                continue
+            assert(val == read_tags[key].value)
+
+
 @pytest.mark.skip(reason="this is no implemented yet.")
 def test_write_rgb_classified():
     """Test saving a transparent RGB."""
