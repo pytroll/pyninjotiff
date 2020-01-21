@@ -282,7 +282,8 @@ def _get_projection_name(area_def):
             return 'SPOL'
         else:
             return 'NPOL'
-    return None
+    # FIXME: this feels like a hack
+    return area_def.proj_id.split('_')[-1]
 
 
 def _get_pixel_size(projection_name, area_def):
@@ -325,7 +326,7 @@ def _get_satellite_altitude(filename):
 
 def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
               data_is_scaled_01=True, fill_value=None):
-    """Finalize a mpop GeoImage for Ninjo.
+    """Finalize a trollimage.Image for Ninjo.
 
     Specialy take care of phycical scale and offset.
 
@@ -588,6 +589,47 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
     write(data, filename, area_def, ninjo_product_name, **kwargs)
 
 
+def ninjo_nav_parameters(options, area_def):
+    """Fill options with the navigation parameter in Ninjo format."""
+    # TODO: add altitude if available
+    proj = Proj(area_def.proj_dict)
+    upper_left = proj(
+        area_def.area_extent[0],
+        area_def.area_extent[3],
+        inverse=True)
+    lower_right = proj(
+        area_def.area_extent[2],
+        area_def.area_extent[1],
+        inverse=True)
+
+    # Ninjo's projection name.
+    options.setdefault('projection', _get_projection_name(area_def))
+
+    # Get pixel size
+    if 'pixel_xres' not in options or 'pixel_yres' not in options:
+        options['pixel_xres'], options['pixel_yres'] = \
+            _get_pixel_size(options['projection'], area_def)
+
+    options['meridian_west'] = upper_left[0]
+    options['meridian_east'] = lower_right[0]
+    if options['projection'].endswith("POL"):
+        if 'lat_ts' in area_def.proj_dict:
+            options['ref_lat1'] = area_def.proj_dict['lat_ts']
+            options['ref_lat2'] = 0
+    else:
+        if 'lat_0' in area_def.proj_dict:
+            options['ref_lat1'] = area_def.proj_dict['lat_0']
+            options['ref_lat2'] = 0
+    if 'lon_0' in area_def.proj_dict:
+        options['central_meridian'] = area_def.proj_dict['lon_0']
+
+    a, b = proj4_radius_parameters(area_def.proj_dict)
+    options['radius_a'] = a
+    options['radius_b'] = b
+    options['origin_lon'] = upper_left[0]
+    options['origin_lat'] = upper_left[1]
+
+
 def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     """Write a Generic Ninjo TIFF.
 
@@ -610,16 +652,6 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs : dict
             See _write
     """
-    proj = Proj(area_def.proj_dict)
-    upper_left = proj(
-        area_def.area_extent[0],
-        area_def.area_extent[3],
-        inverse=True)
-    lower_right = proj(
-        area_def.area_extent[2],
-        area_def.area_extent[1],
-        inverse=True)
-
     if len(image_data.shape) == 3:
         if image_data.shape[2] == 4:
             shape = (area_def.y_size, area_def.x_size, 4)
@@ -645,22 +677,6 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs['physic_unit'], kwargs['physic_value'] = \
             _get_physic_value(physic_unit)
 
-    # Ninjo's projection name.
-    kwargs['projection'] = kwargs.pop('projection', None) or \
-        _get_projection_name(area_def) or \
-        area_def.proj_id.split('_')[-1]
-
-    # Get pixel size
-    if 'pixel_xres' not in kwargs or 'pixel_yres' not in kwargs:
-        kwargs['pixel_xres'], kwargs['pixel_yres'] = \
-            _get_pixel_size(kwargs['projection'], area_def)
-
-    # Get altitude.
-    altitude = kwargs.pop('altitude', None) or \
-        _get_satellite_altitude(output_fn)
-    if altitude is not None:
-        kwargs['altitude'] = altitude
-
     if product_name:
         # If ninjo_product_file in kwargs, load ninjo_product_file as config file
         if 'ninjo_product_file' in kwargs:
@@ -670,27 +686,12 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     else:
         options = {}
 
-    options['meridian_west'] = upper_left[0]
-    options['meridian_east'] = lower_right[0]
-    if kwargs['projection'].endswith("POL"):
-        if 'lat_ts' in area_def.proj_dict:
-            options['ref_lat1'] = area_def.proj_dict['lat_ts']
-            options['ref_lat2'] = 0
-    else:
-        if 'lat_0' in area_def.proj_dict:
-            options['ref_lat1'] = area_def.proj_dict['lat_0']
-            options['ref_lat2'] = 0
-    if 'lon_0' in area_def.proj_dict:
-        options['central_meridian'] = area_def.proj_dict['lon_0']
+    options.update(kwargs)  # Update/overwrite with passed arguments
 
-    a, b = proj4_radius_parameters(area_def.proj_dict)
-    options['radius_a'] = a
-    options['radius_b'] = b
-    options['origin_lon'] = upper_left[0]
-    options['origin_lat'] = upper_left[1]
     options['min_gray_val'] = image_data.min()
     options['max_gray_val'] = image_data.max()
-    options.update(kwargs)  # Update/overwrite with passed arguments
+
+    ninjo_nav_parameters(options, area_def)
 
     _write(image_data, output_fn, write_rgb=write_rgb, **options)
 
