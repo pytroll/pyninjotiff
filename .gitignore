@@ -44,6 +44,7 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
+.mypy_cache/
 
 # Translations
 *.mo
@@ -61,7 +62,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+doc/source/_build/
 
 # PyBuilder
 target/
@@ -87,3 +88,7 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# test images
+*tif
+*tiff
