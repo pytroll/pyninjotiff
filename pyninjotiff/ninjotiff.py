@@ -41,6 +41,9 @@ from copy import deepcopy
 from datetime import datetime
 
 import numpy as np
+from dask import delayed
+import dask.array as da
+import xarray as xr
 
 from pyproj import Proj
 from pyresample.utils import proj4_radius_parameters
@@ -368,90 +371,70 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                 log.debug("Forcing fill value to %s", fill_value)
             # Go back to the masked_array for compatibility
             # with the following part of the code.
-            if (np.issubdtype(img.data[0].dtype, np.integer)
-                    and '_FillValue' in img.data[0].attrs):
-                nodata_value = img.data[0].attrs['_FillValue']
-                data = img.data[0].values
-                data = np.ma.array(data, mask=(data == nodata_value))
+            if (np.issubdtype(img.data.dtype, np.integer)
+                    and '_FillValue' in img.data.attrs):
+                nodata_value = img.data.attrs['_FillValue']
+                if fill_value is None:
+                    fill_value = nodata_value
+                data = img.data.squeeze()
             else:
-                data = img.data[0].to_masked_array()
+                data = img.data.squeeze()
 
         fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
 
-        log.debug("Before scaling: %.2f, %.2f, %.2f" %
-                  (data.min(), data.mean(), data.max()))
+        # log.debug("Before scaling: %.2f, %.2f, %.2f" %
+        #           (data.min(), data.mean(), data.max()))
+        if value_range_measurement_unit and data_is_scaled_01:
+            # No additional scaling of the input data - assume that data is
+            # within [0.0, 1.0] and interpret 0.0 as
+            # value_range_measurement_unit[0] and 1.0 as
+            # value_range_measurement_unit[1]
 
-        if np.ma.count_masked(data) == data.size:
-            # All data is masked
-            data = np.ones(data.shape, dtype=dtype) * fill_value
-            scale = 1
-            offset = 0
+            # Make room for the transparent pixel value.
+            data = data.clip(0, 1)
+            data *= (np.iinfo(dtype).max - 1)
+            data += 1
+
+            scale = ((value_range_measurement_unit[1]
+                      - value_range_measurement_unit[0])
+                     / (np.iinfo(dtype).max - 1))
+            # Handle the case where all data has the same value.
+            scale = scale.where(scale != 0, 1)
+            offset = value_range_measurement_unit[0]
+
+            data = data.round().astype(dtype)
+            offset -= scale
+
+            if fill_value is None:
+                fill_value = 0
+
         else:
-            if value_range_measurement_unit and data_is_scaled_01:
-                # No additional scaling of the input data - assume that data is
-                # within [0.0, 1.0] and interpret 0.0 as
-                # value_range_measurement_unit[0] and 1.0 as
-                # value_range_measurement_unit[1]
-
-                # Make room for the transparent pixel value.
-                data = data.clip(0, 1)
-                data *= (np.iinfo(dtype).max - 1)
-                data += 1
-
-                scale = ((value_range_measurement_unit[1]
-                          - value_range_measurement_unit[0])
-                         / (np.iinfo(dtype).max - 1))
-                # Handle the case where all data has the same value.
-                scale = scale or 1
-                offset = value_range_measurement_unit[0]
-
-                mask = data.mask
-                data = np.round(data.data).astype(dtype)
-                offset -= scale
-
-                if fill_value is None:
-                    fill_value = 0
-
+            if value_range_measurement_unit:
+                data.clip(value_range_measurement_unit[0],
+                          value_range_measurement_unit[1], data)
+                chn_min = value_range_measurement_unit[0]
+                chn_max = value_range_measurement_unit[1]
+                log.debug("Scaling, using value range %.2f - %.2f" %
+                          (value_range_measurement_unit[0], value_range_measurement_unit[1]))
             else:
-                if value_range_measurement_unit:
-                    data.clip(value_range_measurement_unit[0],
-                              value_range_measurement_unit[1], data)
-                    chn_min = value_range_measurement_unit[0]
-                    chn_max = value_range_measurement_unit[1]
-                    log.debug("Scaling, using value range %.2f - %.2f" %
-                              (value_range_measurement_unit[0], value_range_measurement_unit[1]))
-                else:
-                    chn_max = data.max()
-                    chn_min = data.min()
-                    log.debug("Doing auto scaling")
+                chn_max = data.max()
+                chn_min = data.min()
+                log.debug("Doing auto scaling")
 
-                # Make room for transparent pixel.
-                scale = ((chn_max - chn_min) /
-                         (np.iinfo(dtype).max - 1.0))
+            # Make room for transparent pixel.
+            scale = ((chn_max - chn_min) / (np.iinfo(dtype).max - 1.0))
 
-                # Handle the case where all data has the same value.
-                scale = scale or 1
-                offset = chn_min
+            # Handle the case where all data has the same value.
+            scale = scale.where(scale != 0, 1)
+            scale = scale.where(scale.notnull(), 1)
+            offset = chn_min.where(chn_min.notnull(), 0)
 
-                # Scale data to dtype, and adjust for transparent pixel forced
-                # to be minimum.
-                mask = data.mask
-                data = 1 + ((data.data - offset) / scale).astype(dtype)
-                offset -= scale
+            # Scale data to dtype, and adjust for transparent pixel forced
+            # to be minimum.
+            data = (1 + ((data - offset) / scale)).astype(dtype)
+            offset -= scale
 
-            data[mask] = fill_value
-
-            if log.getEffectiveLevel() == logging.DEBUG:
-                d__ = np.ma.array(data, mask=(data == fill_value))
-                log.debug("After scaling:  %.2f, %.2f, %.2f" % (d__.min(),
-                                                                d__.mean(),
-                                                                d__.max()))
-                d__ = data * scale + offset
-                d__ = np.ma.array(d__, mask=(data == fill_value))
-                log.debug("Rescaling:      %.2f, %.2f, %.2f" % (d__.min(),
-                                                                d__.mean(),
-                                                                d__.max()))
-                del d__
+        data = data.where(data.notnull(), fill_value)
 
         return data, scale, offset, fill_value
 
@@ -460,23 +443,11 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
             channels, fill_value = img._finalize(dtype)
         else:
             data, mode = img.finalize(fill_value=fill_value, dtype=dtype)
-            # Go back to the masked_array for compatibility with
-            # the rest of the code.
-            channels = data.to_masked_array()
+            data = data.transpose('y', 'x', 'bands')
             # Is this fill_value ok or what should it be?
-            fill_value = (0, 0, 0, 0)
+            fill_value = fill_value or 0
 
-        if isinstance(img, np.ma.MaskedArray) and fill_value is None:
-            mask = (np.ma.getmaskarray(channels[0]) &
-                    np.ma.getmaskarray(channels[1]) &
-                    np.ma.getmaskarray(channels[2]))
-            channels.append((np.ma.logical_not(mask) *
-                             np.iinfo(channels[0].dtype).max).astype(channels[0].dtype))
-            fill_value = (0, 0, 0, 0)
-
-        data = np.dstack([channel.filled(fill_v)
-                          for channel, fill_v in zip(channels, fill_value)])
-        return data, 1.0, 0.0, fill_value[0]
+        return data, 1.0, 0.0, fill_value
 
     elif img.mode == 'RGBA':
         if not isinstance(img, np.ma.MaskedArray):
@@ -549,8 +520,8 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
         fill_value = int(kwargs['fill_value'])
 
     try:
-        value_range_measurement_unit = (float(kwargs["ch_min_measurement_unit"]),
-                                        float(kwargs["ch_max_measurement_unit"]))
+        value_range_measurement_unit = (xr.DataArray(kwargs["ch_min_measurement_unit"]).astype(float),
+                                        xr.DataArray(kwargs["ch_max_measurement_unit"]).astype(float))
     except KeyError:
         value_range_measurement_unit = None
 
@@ -586,7 +557,7 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
             g += [0] * (256 - len(g))
             b += [0] * (256 - len(b))
         kwargs['cmap'] = r, g, b
-    write(data, filename, area_def, ninjo_product_name, **kwargs)
+    return write(data, filename, area_def, ninjo_product_name, **kwargs)
 
 
 def ninjo_nav_parameters(options, area_def):
@@ -652,22 +623,22 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         kwargs : dict
             See _write
     """
-    if len(image_data.shape) == 3:
-        if image_data.shape[2] == 4:
-            shape = (area_def.y_size, area_def.x_size, 4)
+    if len(image_data.sizes) == 3:
+        if image_data.sizes['bands'] == 4:
+            # shape = (area_def.y_size, area_def.x_size, 4)
             log.info("Will generate RGBA product")
-        else:
-            shape = (area_def.y_size, area_def.x_size, 3)
+            write_rgb = True
+        elif image_data.sizes['bands'] == 3:
+            # shape = (area_def.y_size, area_def.x_size, 3)
             log.info("Will generate RGB product")
-        write_rgb = True
+            write_rgb = True
+        else:
+            write_rgb = False
+            log.info("Will generate single band product")
+
     else:
-        shape = (area_def.y_size, area_def.x_size)
         write_rgb = False
         log.info("Will generate single band product")
-
-    if image_data.shape != shape:
-        raise ValueError("Raster shape %s does not correspond to expected shape %s" % (
-            str(image_data.shape), str(shape)))
 
     # Ninjo's physical units and value.
     # If just a physical unit (e.g. 'C') is passed, it will then be
@@ -687,13 +658,13 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         options = {}
 
     options.update(kwargs)  # Update/overwrite with passed arguments
-
-    options['min_gray_val'] = image_data.min()
-    options['max_gray_val'] = image_data.max()
+    if len(image_data.sizes) == 2:
+        options['min_gray_val'] = image_data.data.min().astype(int)
+        options['max_gray_val'] = image_data.data.max().astype(int)
 
     ninjo_nav_parameters(options, area_def)
 
-    _write(image_data, output_fn, write_rgb=write_rgb, **options)
+    return _write(image_data, output_fn, write_rgb=write_rgb, **options)
 
 
 # -----------------------------------------------------------------------------
@@ -860,8 +831,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     ref_lat1 = _eval_or_none("ref_lat1", float)
     ref_lat2 = _eval_or_none("ref_lat2", float)
     central_meridian = _eval_or_none("central_meridian", float)
-    min_gray_val = int(kwargs.pop("min_gray_val", 0))
-    max_gray_val = int(kwargs.pop("max_gray_val", 255))
+    min_gray_val = kwargs.pop("min_gray_val", 0)
+    max_gray_val = kwargs.pop("max_gray_val", 255)
     altitude = _eval_or_none("altitude", float)
     is_blac_corrected = int(bool(kwargs.pop("is_blac_corrected", 0)))
     is_atmo_corrected = int(bool(kwargs.pop("is_atmo_corrected", 0)))
@@ -873,8 +844,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
 
     physic_value = str(kwargs.pop("physic_value", 'None'))
     physic_unit = str(kwargs.pop("physic_unit", 'None'))
-    gradient = float(kwargs.pop("gradient", 1.0))
-    axis_intercept = float(kwargs.pop("axis_intercept", 0.0))
+    gradient = kwargs.pop("gradient", 1.0)
+    axis_intercept = kwargs.pop("axis_intercept", 0.0)
     try:
         transparent_pix = int(kwargs.get("transparent_pix", -1))
     except Exception:
@@ -1076,26 +1047,34 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     header_only_keys = ('byteorder', 'bigtiff', 'software', 'writeshape')
     for key in header_only_keys:
         if key in args:
-            tifargs[key] = args[key]
-            del args[key]
-
+            tifargs[key] = args.pop(key)
     if 'writeshape' not in args:
         args['writeshape'] = True
     if 'bigtiff' not in tifargs and \
             image_data.size * image_data.dtype.itemsize > 2000 * 2 ** 20:
         tifargs['bigtiff'] = True
+    factor = 2
+    factors = []
+    while image_data.shape[0] // factor > tile_length and image_data.shape[1] // factor > tile_width:
+        factors.append(factor)
+        factor **= 2
+    if kwargs.get('compute', True):
+        return tiffwrite(output_fn, image_data, args, tifargs, factors)
+    else:
+        return delayed(tiffwrite)(output_fn, image_data, args, tifargs, factors)
+
+
+def tiffwrite(output_fn, image_data, args, tifargs, ovw_factors):
+    """Write to tiff."""
     with local_tifffile.TiffWriter(output_fn, **tifargs) as tif:
+        image_data, args = da.compute(image_data, args)
         tif.save(image_data, **args)
-        for _, scale in enumerate((2, 4, 8, 16)):
-            shape = (image_data.shape[0] / scale,
-                     image_data.shape[1] / scale)
-            if shape[0] > tile_width and shape[1] > tile_length:
-                args = _create_args(image_data[::scale, ::scale],
-                                    pixel_xres * scale, pixel_yres * scale)
-                for key in header_only_keys:
-                    if key in args:
-                        del args[key]
-                tif.save(image_data[::scale, ::scale], **args)
+        for factor in ovw_factors:
+            ovw_args = args.copy()
+            ovw_args['extratags'] = dict()
+            ovw_args['tile_length'] //= factor
+            ovw_args['tile_width'] //= factor
+            tif.save(image_data[::factor, ::factor], **ovw_args)
 
     log.info("Successfully created a NinJo tiff file: '%s'" % (output_fn,))
 

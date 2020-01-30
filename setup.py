@@ -20,8 +20,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Setup for pyninjotiff.
-"""
+"""Setup for pyninjotiff."""
 
 import imp
 
@@ -44,6 +43,6 @@ setup(name="pyninjotiff",
       url="https://github.com/pytroll/pyninjotiff",
       packages=['pyninjotiff'],
       zip_safe=False,
-      install_requires=['numpy >=1.6', 'six', 'pyproj', 'pyresample'],
+      install_requires=['numpy >=1.6', 'six', 'pyproj', 'pyresample', 'dask', 'xarray'],
       # test_suite='pyninjotiff.tests.suite',
       )
