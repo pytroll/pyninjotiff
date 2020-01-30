@@ -43,6 +43,6 @@ setup(name="pyninjotiff",
       url="https://github.com/pytroll/pyninjotiff",
       packages=['pyninjotiff'],
       zip_safe=False,
-      install_requires=['numpy >=1.6', 'six', 'pyproj', 'pyresample', 'dask[array]', 'xarray'],
+      install_requires=['numpy >=1.6', 'six', 'pyproj', 'pyresample', 'dask[dataframe]', 'xarray'],
       # test_suite='pyninjotiff.tests.suite',
       )
