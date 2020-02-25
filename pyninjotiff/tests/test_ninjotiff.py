@@ -95,8 +95,8 @@ def test_write_bw():
                   ('ancillary_variables', []),
                   ('enhancement_history', [{'offset': offset, 'scale': scale}])])
 
-    kwargs = {'ch_min_measurement_unit': np.array([0]),
-              'ch_max_measurement_unit': np.array([120]),
+    kwargs = {'ch_min_measurement_unit': xr.DataArray(0),
+              'ch_max_measurement_unit': xr.DataArray(120),
               'compute': True, 'fill_value': None, 'sat_id': 6300014,
               'chan_id': 100015, 'data_cat': 'PORN', 'data_source': 'SMHI',
               'physic_unit': '%', 'nbits': 8}
@@ -486,9 +486,9 @@ def test_write_rgb_tb():
         tif = TiffFile(filename)
         res = tif[0].asarray()
         assert(tif.pages[0].tags['tile_length'].value == 256)
-        assert(tif.pages[1].tags['tile_length'].value == 256)
+        assert(tif.pages[1].tags['tile_length'].value == 128)
         assert(tif.pages[0].tags['tile_width'].value == 256)
-        assert(tif.pages[1].tags['tile_width'].value == 256)
+        assert(tif.pages[1].tags['tile_width'].value == 128)
         assert(len(tif.pages) == 2)
         assert(tif.pages[0].shape == (1024, 1024, 4))
         assert(tif.pages[1].shape == (512, 512, 4))
