@@ -2,6 +2,33 @@ Changelog
 =========
 
 
+v0.3.0 (2020-02-25)
+-------------------
+- update changelog. [Martin Raspaud]
+- Bump version: 0.2.0 → 0.3.0. [Martin Raspaud]
+- Merge pull request #21 from mraspaud/feature-dask-start. [Martin
+  Raspaud]
+
+  Adapt ninjotiff to xarray and dask
+- Require dask dataframe. [Martin Raspaud]
+- Specify dask[array] as dependency. [Martin Raspaud]
+- Make ninjotiff.py xarray-based and dask friendly. [Martin Raspaud]
+- Update .gitignore. [Martin Raspaud]
+- Add a precommit config. [Martin Raspaud]
+- Merge pull request #20 from mraspaud/feature-colormap-unittests.
+  [Martin Raspaud]
+
+  Add unittests for the colormapped albedo and IR images, and thumbnails
+- Remove python 2.7 from travis. [Martin Raspaud]
+- Refactor nav parameter computations. [Martin Raspaud]
+- Add test for tags and thumbnails. [Martin Raspaud]
+- Test colormap and values separately. [Martin Raspaud]
+- Fix wavelength and calibration for the tests. [Martin Raspaud]
+- Fix the time of the test images. [Martin Raspaud]
+- Add unittests for the colormapped albedo and IR images. [Martin
+  Raspaud]
+
+
 v0.2.0 (2019-09-19)
 -------------------
 - update changelog. [Martin Raspaud]
@@ -103,6 +130,5 @@ v0.1.0 (2017-10-16)
 - Bugfix. [Martin Raspaud]
 - First commit, copy files from mpop. [Martin Raspaud]
 - Initial commit. [Martin Raspaud]
-
 
 
