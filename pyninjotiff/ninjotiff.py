@@ -200,10 +200,7 @@ class ProductConfigs(object):
         """Call the product config."""
         if force_read:
             self.read_config(config_filename)
-        if product_name in self._products:
-            return self._products[product_name]
-        else:
-            return {}
+        return self._products.get(product_name, {})
 
     @property
     def product_names(self):
@@ -245,12 +242,12 @@ class ProductConfigs(object):
         name_ = os.path.abspath(os.path.expanduser(fname))
         if os.path.isfile(name_):
             return name_
-        else:
-            home_ = os.path.dirname(os.path.abspath(__file__))
-            penv_ = os.environ.get('PPP_CONFIG_DIR', '')
-            for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
-                if os.path.isfile(fname_):
-                    return fname_
+
+        home_ = os.path.dirname(os.path.abspath(__file__))
+        penv_ = os.environ.get('PPP_CONFIG_DIR', '')
+        for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
+            if os.path.isfile(fname_):
+                return fname_
         # raise ValueError("Could not find a Ninjo tiff config file")
 
 
@@ -263,14 +260,14 @@ def _get_physic_value(physic_unit):
     # return Ninjo's physics unit and value.
     if physic_unit.upper() in ('K', 'KELVIN'):
         return 'Kelvin', 'T'
-    elif physic_unit.upper() in ('C', 'CELSIUS'):
+    if physic_unit.upper() in ('C', 'CELSIUS'):
         return 'Celsius', 'T'
-    elif physic_unit == '%':
+    if physic_unit == '%':
         return physic_unit, 'Reflectance'
-    elif physic_unit.upper() in ('MW M-2 SR-1 (CM-1)-1',):
+    if physic_unit.upper() in ('MW M-2 SR-1 (CM-1)-1',):
         return physic_unit, 'Radiance'
-    else:
-        return physic_unit, 'Unknown'
+
+    return physic_unit, 'Unknown'
 
 
 def _get_projection_name(area_def):
@@ -278,14 +275,14 @@ def _get_projection_name(area_def):
     proj_name = area_def.proj_dict['proj']
     if proj_name in ('eqc',):
         return 'PLAT'
-    elif proj_name in ('merc',):
+    if proj_name in ('merc',):
         return 'MERC'
-    elif proj_name in ('stere',):
+    if proj_name in ('stere',):
         lat_0 = area_def.proj_dict['lat_0']
         if lat_0 < 0:
             return 'SPOL'
-        else:
-            return 'NPOL'
+
+        return 'NPOL'
     # FIXME: this feels like a hack
     return area_def.proj_id.split('_')[-1]
 
@@ -428,7 +425,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
         return data, scale, offset, fill_value
 
-    elif img.mode == 'RGB':
+    if img.mode == 'RGB':
         if isinstance(img, np.ma.MaskedArray):
             channels, fill_value = img._finalize(dtype)
         else:
@@ -439,7 +436,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
         return data, 1.0, 0.0, fill_value
 
-    elif img.mode == 'RGBA':
+    if img.mode == 'RGBA':
         if not isinstance(img, np.ma.MaskedArray):
             raise NotImplementedError("The 'RGBA' case has not been updated to xarray")
         channels, fill_value = img._finalize(dtype)
@@ -450,7 +447,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                           channels[3].filled(fill_value[3])))
         return data, 1.0, 0.0, fill_value[0]
 
-    elif img.mode == 'P':
+    if img.mode == 'P':
         if not isinstance(img, np.ma.MaskedArray):
             data = img.data.squeeze()
             fill_value = _get_fill_value_from_arg_and_image(fill_value, img)
@@ -468,9 +465,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                   (data.min(), data.mean(), data.max()))
         return data, 1.0, 0.0, fill_value
 
-    else:
-        raise ValueError("Don't know how to handle image mode '%s'" %
-                         str(img.mode))
+    raise ValueError("Don't know how to handle image mode '%s'" %
+                     str(img.mode))
 
 
 def _get_fill_value_from_arg_and_image(fill_value, img):
@@ -805,10 +801,10 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
             if reverse:
                 return [[x for x in range(65535, -1, -1)]] * 3
             return [[x for x in range(65536)]] * 3
-        else:
-            if reverse:
-                return [[x * 256 for x in range(255, -1, -1)]] * 3
-            return [[x * 256 for x in range(256)]] * 3
+
+        if reverse:
+            return [[x * 256 for x in range(255, -1, -1)]] * 3
+        return [[x * 256 for x in range(256)]] * 3
 
     def _eval_or_none(key, eval_func):
         try:
@@ -873,10 +869,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     # Handle colormap or not.
     min_is_white = False
     if not write_rgb and not cmap:
-        if physic_value == 'T' and inv_def_temperature_cmap:
-            reverse = True
-        else:
-            reverse = False
+        reverse = (physic_value == 'T' and inv_def_temperature_cmap)
+
         if np.iinfo(image_data.dtype).bits == 8:
             # Always generate colormap for 8 bit gray scale.
             cmap = _default_colormap(reverse)
@@ -1075,8 +1069,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
         factor **= 2
     if kwargs.get('compute', True):
         return tiffwrite(output_fn, image_data, args, tifargs, factors)
-    else:
-        return delayed(tiffwrite)(output_fn, image_data, args, tifargs, factors)
+
+    return delayed(tiffwrite)(output_fn, image_data, args, tifargs, factors)
 
 
 def tiffwrite(output_fn, image_data, args, tifargs, ovw_factors):
