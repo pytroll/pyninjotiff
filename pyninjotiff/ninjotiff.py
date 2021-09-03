@@ -44,6 +44,7 @@ import numpy as np
 from dask import delayed
 import dask.array as da
 import xarray as xr
+from contextlib import suppress
 
 from pyproj import Proj
 from pyresample.utils import proj4_radius_parameters
@@ -366,19 +367,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         if isinstance(img, np.ma.MaskedArray):
             data = img.channels[0]
         else:
-            # TODO: check what is the correct fill value for NinJo!
-            if fill_value is not None:
-                log.debug("Forcing fill value to %s", fill_value)
-            # Go back to the masked_array for compatibility
-            # with the following part of the code.
-            if (np.issubdtype(img.data.dtype, np.integer)
-                    and '_FillValue' in img.data.attrs):
-                nodata_value = img.data.attrs['_FillValue']
-                if fill_value is None:
-                    fill_value = nodata_value
-                data = img.data.squeeze()
-            else:
-                data = img.data.squeeze()
+            fill_value = _get_fill_value_from_arg_and_image(fill_value, img)
+            data = img.data.squeeze()
 
         fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
 
@@ -462,7 +452,13 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
     elif img.mode == 'P':
         if not isinstance(img, np.ma.MaskedArray):
-            raise NotImplementedError("The 'P' case has not been updated to xarray")
+            data = img.data.squeeze()
+            fill_value = _get_fill_value_from_arg_and_image(fill_value, img)
+            fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
+            data = data.where(data.notnull(), fill_value)
+
+            return data, 1.0, 0.0, 0
+        # Numpy masked array
         fill_value = 0
         data = img.channels[0]
         if isinstance(data, np.ma.core.MaskedArray):
@@ -475,6 +471,15 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
     else:
         raise ValueError("Don't know how to handle image mode '%s'" %
                          str(img.mode))
+
+
+def _get_fill_value_from_arg_and_image(fill_value, img):
+    if fill_value is not None:
+        log.debug("Forcing fill value to %s", fill_value)
+    elif (np.issubdtype(img.data.dtype, np.integer)
+            and '_FillValue' in img.data.attrs):
+        fill_value = img.data.attrs['_FillValue']
+    return fill_value
 
 
 def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_scaled_01=True,
@@ -548,16 +553,25 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
     kwargs['image_dt'] = time_slot
     kwargs['is_calibrated'] = True
     if img.mode == 'P' and 'cmap' not in kwargs:
-        r, g, b = zip(*img.palette)
-        r = list((np.array(r) * 255).astype(np.uint8))
-        g = list((np.array(g) * 255).astype(np.uint8))
-        b = list((np.array(b) * 255).astype(np.uint8))
-        if len(r) < 256:
-            r += [0] * (256 - len(r))
-            g += [0] * (256 - len(g))
-            b += [0] * (256 - len(b))
-        kwargs['cmap'] = r, g, b
+        kwargs['cmap'] = make_palette(img)
     return write(data, filename, area_def, ninjo_product_name, **kwargs)
+
+
+def make_palette(img):
+    """Make a tiff palette from the image's palette."""
+    try:
+        r, g, b = zip(*img.palette)
+    except ValueError:
+        r, g, b, a = zip(*img.palette)
+        log.warning("Ignoring palette's alpha.")
+    r = list((np.array(r) * 255).astype(np.uint8))
+    g = list((np.array(g) * 255).astype(np.uint8))
+    b = list((np.array(b) * 255).astype(np.uint8))
+    if len(r) < 256:
+        r += [0] * (256 - len(r))
+        g += [0] * (256 - len(g))
+        b += [0] * (256 - len(b))
+    return r, g, b
 
 
 def ninjo_nav_parameters(options, area_def):
@@ -610,7 +624,7 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     overwrite config file.
 
     :Parameters:
-        image_data : 2D numpy array
+        image_data : 2D or 3D xr.DataArray
             Satellite image data to be put into the NinJo compatible tiff
         output_fn : str
             The name of the TIFF file to be created
@@ -658,9 +672,10 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         options = {}
 
     options.update(kwargs)  # Update/overwrite with passed arguments
-    if len(image_data.sizes) == 2:
-        options['min_gray_val'] = image_data.data.min().astype(int)
-        options['max_gray_val'] = image_data.data.max().astype(int)
+    with suppress(ValueError):
+        if image_data.coords["bands"] in ["L", "P"]:
+            options['min_gray_val'] = image_data.data.min().astype(int)
+            options['max_gray_val'] = image_data.data.max().astype(int)
 
     ninjo_nav_parameters(options, area_def)
 
