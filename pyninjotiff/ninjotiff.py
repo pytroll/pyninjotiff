@@ -44,6 +44,7 @@ import numpy as np
 from dask import delayed
 import dask.array as da
 import xarray as xr
+from contextlib import suppress
 
 from pyproj import Proj
 from pyresample.utils import proj4_radius_parameters
@@ -199,10 +200,7 @@ class ProductConfigs(object):
         """Call the product config."""
         if force_read:
             self.read_config(config_filename)
-        if product_name in self._products:
-            return self._products[product_name]
-        else:
-            return {}
+        return self._products.get(product_name, {})
 
     @property
     def product_names(self):
@@ -244,12 +242,12 @@ class ProductConfigs(object):
         name_ = os.path.abspath(os.path.expanduser(fname))
         if os.path.isfile(name_):
             return name_
-        else:
-            home_ = os.path.dirname(os.path.abspath(__file__))
-            penv_ = os.environ.get('PPP_CONFIG_DIR', '')
-            for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
-                if os.path.isfile(fname_):
-                    return fname_
+
+        home_ = os.path.dirname(os.path.abspath(__file__))
+        penv_ = os.environ.get('PPP_CONFIG_DIR', '')
+        for fname_ in [os.path.join(x, name_) for x in (home_, penv_)]:
+            if os.path.isfile(fname_):
+                return fname_
         # raise ValueError("Could not find a Ninjo tiff config file")
 
 
@@ -262,14 +260,14 @@ def _get_physic_value(physic_unit):
     # return Ninjo's physics unit and value.
     if physic_unit.upper() in ('K', 'KELVIN'):
         return 'Kelvin', 'T'
-    elif physic_unit.upper() in ('C', 'CELSIUS'):
+    if physic_unit.upper() in ('C', 'CELSIUS'):
         return 'Celsius', 'T'
-    elif physic_unit == '%':
+    if physic_unit == '%':
         return physic_unit, 'Reflectance'
-    elif physic_unit.upper() in ('MW M-2 SR-1 (CM-1)-1',):
+    if physic_unit.upper() in ('MW M-2 SR-1 (CM-1)-1',):
         return physic_unit, 'Radiance'
-    else:
-        return physic_unit, 'Unknown'
+
+    return physic_unit, 'Unknown'
 
 
 def _get_projection_name(area_def):
@@ -277,14 +275,14 @@ def _get_projection_name(area_def):
     proj_name = area_def.proj_dict['proj']
     if proj_name in ('eqc',):
         return 'PLAT'
-    elif proj_name in ('merc',):
+    if proj_name in ('merc',):
         return 'MERC'
-    elif proj_name in ('stere',):
+    if proj_name in ('stere',):
         lat_0 = area_def.proj_dict['lat_0']
         if lat_0 < 0:
             return 'SPOL'
-        else:
-            return 'NPOL'
+
+        return 'NPOL'
     # FIXME: this feels like a hack
     return area_def.proj_id.split('_')[-1]
 
@@ -366,19 +364,8 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
         if isinstance(img, np.ma.MaskedArray):
             data = img.channels[0]
         else:
-            # TODO: check what is the correct fill value for NinJo!
-            if fill_value is not None:
-                log.debug("Forcing fill value to %s", fill_value)
-            # Go back to the masked_array for compatibility
-            # with the following part of the code.
-            if (np.issubdtype(img.data.dtype, np.integer)
-                    and '_FillValue' in img.data.attrs):
-                nodata_value = img.data.attrs['_FillValue']
-                if fill_value is None:
-                    fill_value = nodata_value
-                data = img.data.squeeze()
-            else:
-                data = img.data.squeeze()
+            fill_value = _get_fill_value_from_arg_and_image(fill_value, img)
+            data = img.data.squeeze()
 
         fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
 
@@ -438,7 +425,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
         return data, scale, offset, fill_value
 
-    elif img.mode == 'RGB':
+    if img.mode == 'RGB':
         if isinstance(img, np.ma.MaskedArray):
             channels, fill_value = img._finalize(dtype)
         else:
@@ -449,7 +436,7 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
         return data, 1.0, 0.0, fill_value
 
-    elif img.mode == 'RGBA':
+    if img.mode == 'RGBA':
         if not isinstance(img, np.ma.MaskedArray):
             raise NotImplementedError("The 'RGBA' case has not been updated to xarray")
         channels, fill_value = img._finalize(dtype)
@@ -460,9 +447,15 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                           channels[3].filled(fill_value[3])))
         return data, 1.0, 0.0, fill_value[0]
 
-    elif img.mode == 'P':
+    if img.mode == 'P':
         if not isinstance(img, np.ma.MaskedArray):
-            raise NotImplementedError("The 'P' case has not been updated to xarray")
+            data = img.data.squeeze()
+            fill_value = _get_fill_value_from_arg_and_image(fill_value, img)
+            fill_value = fill_value if fill_value is not None else np.iinfo(dtype).min
+            data = data.where(data.notnull(), fill_value)
+
+            return data, 1.0, 0.0, 0
+        # Numpy masked array
         fill_value = 0
         data = img.channels[0]
         if isinstance(data, np.ma.core.MaskedArray):
@@ -472,9 +465,17 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
                   (data.min(), data.mean(), data.max()))
         return data, 1.0, 0.0, fill_value
 
-    else:
-        raise ValueError("Don't know how to handle image mode '%s'" %
-                         str(img.mode))
+    raise ValueError("Don't know how to handle image mode '%s'" %
+                     str(img.mode))
+
+
+def _get_fill_value_from_arg_and_image(fill_value, img):
+    if fill_value is not None:
+        log.debug("Forcing fill value to %s", fill_value)
+    elif (np.issubdtype(img.data.dtype, np.integer)
+            and '_FillValue' in img.data.attrs):
+        fill_value = img.data.attrs['_FillValue']
+    return fill_value
 
 
 def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_scaled_01=True,
@@ -548,16 +549,25 @@ def save(img, filename, ninjo_product_name=None, writer_options=None, data_is_sc
     kwargs['image_dt'] = time_slot
     kwargs['is_calibrated'] = True
     if img.mode == 'P' and 'cmap' not in kwargs:
-        r, g, b = zip(*img.palette)
-        r = list((np.array(r) * 255).astype(np.uint8))
-        g = list((np.array(g) * 255).astype(np.uint8))
-        b = list((np.array(b) * 255).astype(np.uint8))
-        if len(r) < 256:
-            r += [0] * (256 - len(r))
-            g += [0] * (256 - len(g))
-            b += [0] * (256 - len(b))
-        kwargs['cmap'] = r, g, b
+        kwargs['cmap'] = make_palette(img)
     return write(data, filename, area_def, ninjo_product_name, **kwargs)
+
+
+def make_palette(img):
+    """Make a tiff palette from the image's palette."""
+    try:
+        r, g, b = zip(*img.palette)
+    except ValueError:
+        r, g, b, a = zip(*img.palette)
+        log.warning("Ignoring palette's alpha.")
+    r = list((np.array(r) * 255).astype(np.uint8))
+    g = list((np.array(g) * 255).astype(np.uint8))
+    b = list((np.array(b) * 255).astype(np.uint8))
+    if len(r) < 256:
+        r += [0] * (256 - len(r))
+        g += [0] * (256 - len(g))
+        b += [0] * (256 - len(b))
+    return r, g, b
 
 
 def ninjo_nav_parameters(options, area_def):
@@ -610,7 +620,7 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
     overwrite config file.
 
     :Parameters:
-        image_data : 2D numpy array
+        image_data : 2D or 3D xr.DataArray
             Satellite image data to be put into the NinJo compatible tiff
         output_fn : str
             The name of the TIFF file to be created
@@ -658,9 +668,10 @@ def write(image_data, output_fn, area_def, product_name=None, **kwargs):
         options = {}
 
     options.update(kwargs)  # Update/overwrite with passed arguments
-    if len(image_data.sizes) == 2:
-        options['min_gray_val'] = image_data.data.min().astype(int)
-        options['max_gray_val'] = image_data.data.max().astype(int)
+    with suppress(ValueError):
+        if image_data.coords["bands"] in ["L", "P"]:
+            options['min_gray_val'] = image_data.data.min().astype(int)
+            options['max_gray_val'] = image_data.data.max().astype(int)
 
     ninjo_nav_parameters(options, area_def)
 
@@ -790,10 +801,10 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
             if reverse:
                 return [[x for x in range(65535, -1, -1)]] * 3
             return [[x for x in range(65536)]] * 3
-        else:
-            if reverse:
-                return [[x * 256 for x in range(255, -1, -1)]] * 3
-            return [[x * 256 for x in range(256)]] * 3
+
+        if reverse:
+            return [[x * 256 for x in range(255, -1, -1)]] * 3
+        return [[x * 256 for x in range(256)]] * 3
 
     def _eval_or_none(key, eval_func):
         try:
@@ -858,10 +869,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
     # Handle colormap or not.
     min_is_white = False
     if not write_rgb and not cmap:
-        if physic_value == 'T' and inv_def_temperature_cmap:
-            reverse = True
-        else:
-            reverse = False
+        reverse = (physic_value == 'T' and inv_def_temperature_cmap)
+
         if np.iinfo(image_data.dtype).bits == 8:
             # Always generate colormap for 8 bit gray scale.
             cmap = _default_colormap(reverse)
@@ -1060,8 +1069,8 @@ def _write(image_data, output_fn, write_rgb=False, **kwargs):
         factor **= 2
     if kwargs.get('compute', True):
         return tiffwrite(output_fn, image_data, args, tifargs, factors)
-    else:
-        return delayed(tiffwrite)(output_fn, image_data, args, tifargs, factors)
+
+    return delayed(tiffwrite)(output_fn, image_data, args, tifargs, factors)
 
 
 def tiffwrite(output_fn, image_data, args, tifargs, ovw_factors):

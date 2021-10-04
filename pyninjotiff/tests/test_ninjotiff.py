@@ -22,13 +22,17 @@
 
 """Test the ninjotiff writing."""
 
-import numpy as np
+import colorsys
 import datetime
 import tempfile
-import xarray as xr
+
 import dask.array as da
-import colorsys
+import numpy as np
 import pytest
+import xarray as xr
+from pyninjotiff.ninjotiff import save
+from pyninjotiff.tifffile import TiffFile
+from trollimage.xrimage import XRImage
 
 TIME = datetime.datetime.utcnow()
 DELETE_FILES = True
@@ -53,6 +57,11 @@ class FakeImage(object):
             res = self.data
         return [res.astype(dtype)]
 
+    @property
+    def palette(self):
+        """Return the palette of the image."""
+        return self.data.attrs['palette']
+
 
 class FakeArea(object):
     """Fake area class."""
@@ -66,17 +75,17 @@ class FakeArea(object):
         self.pixel_size_y = (extent[3] - extent[1]) / y_size
 
 
+STEREOGRAPHIC_AREA = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
+                              (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
+                              1024, 1024)
+
+
 def test_write_bw():
     """Test saving a BW image.
 
     Reflectances.
     """
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
     scale = 1.0 / 120
     offset = 0.0
     attrs = dict([('resolution', 1050),
@@ -122,12 +131,7 @@ def test_write_bw():
 
 def test_write_bw_inverted_ir():
     """Test saving a BW image."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
     scale = 1.0 / 120
     offset = 70.0 / 120
     attrs = dict([('resolution', 1050),
@@ -173,12 +177,7 @@ def test_write_bw_inverted_ir():
 
 def test_write_bw_fill():
     """Test saving a BW image with transparency."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
     scale = 1.0 / 120
     offset = 0.0
     attrs = dict([('resolution', 1050),
@@ -229,12 +228,7 @@ def test_write_bw_fill():
 
 def test_write_bw_inverted_ir_fill():
     """Test saving a BW image with transparency."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
     scale = 1.0 / 120
     offset = 70.0 / 120
     attrs = dict([('resolution', 1050),
@@ -285,12 +279,7 @@ def test_write_bw_inverted_ir_fill():
 
 def test_write_rgb():
     """Test saving a non-trasparent RGB."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
 
     x_size, y_size = 1024, 1024
     arr = np.zeros((3, y_size, x_size))
@@ -336,7 +325,6 @@ def test_write_rgb():
     data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
                         'bands', 'y', 'x'], attrs=attrs)
 
-    from trollimage.xrimage import XRImage
     img = XRImage(data)
 
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
@@ -353,12 +341,7 @@ def test_write_rgb():
 
 def test_write_rgb_with_a():
     """Test saving a transparent RGB."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
 
     x_size, y_size = 1024, 1024
     arr = np.zeros((3, y_size, x_size))
@@ -406,7 +389,7 @@ def test_write_rgb_with_a():
 
     data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
                         'bands', 'y', 'x'], attrs=attrs)
-    from trollimage.xrimage import XRImage
+
     img = XRImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
         filename = tmpfile.name
@@ -423,12 +406,7 @@ def test_write_rgb_with_a():
 
 def test_write_rgb_tb():
     """Test saving a non-trasparent RGB with thumbnails."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
 
     x_size, y_size = 1024, 1024
     arr = np.zeros((3, y_size, x_size))
@@ -475,7 +453,6 @@ def test_write_rgb_tb():
     data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B']}, dims=[
                         'bands', 'y', 'x'], attrs=attrs)
 
-    from trollimage.xrimage import XRImage
     img = XRImage(data)
 
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
@@ -568,12 +545,7 @@ def test_write_rgb_tb():
 @pytest.mark.skip(reason="this is no implemented yet.")
 def test_write_rgb_classified():
     """Test saving a transparent RGB."""
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
 
     x_size, y_size = 1024, 1024
     arr = np.zeros((3, y_size, x_size))
@@ -606,7 +578,6 @@ def test_write_rgb_classified():
     data = da.concatenate((data1, datanan, data2), axis=1)
     data = xr.DataArray(data, coords={'bands': ['P']}, dims=['bands', 'y', 'x'], attrs=attrs)
 
-    from trollimage.xrimage import XRImage
     img = XRImage(data)
     with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
         filename = tmpfile.name
@@ -628,12 +599,7 @@ def test_write_bw_colormap():
 
     Reflectances are 0, 29.76, 60, 90.24, 120.
     """
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
     scale = 1.0 / 120
     offset = 0.0
     attrs = dict([('resolution', 1050),
@@ -695,16 +661,21 @@ def test_write_bw_colormap():
         if not DELETE_FILES:
             print(filename)
         save(img, filename, data_is_scaled_01=True, **kwargs)
-        tif = TiffFile(filename)
-        page = tif[0]
-        res = page.asarray(colormapped=False).squeeze()
-        colormap = page.tags['color_map'].value
+        colormap, res = _load_file_values_with_colormap(filename)
 
         assert(len(colormap) == 768)
         assert(np.allclose(colormap[:256], cm_vis))
         assert(np.allclose(colormap[256:512], cm_vis))
         assert(np.allclose(colormap[512:], cm_vis))
         assert(np.allclose(res[0, ::205], np.array([1,  64, 128, 192, 255])))
+
+
+def _load_file_values_with_colormap(filename):
+    tif = TiffFile(filename)
+    page = tif[0]
+    res = page.asarray(colormapped=False).squeeze()
+    colormap = page.tags['color_map'].value
+    return colormap, res
 
 
 def test_write_ir_colormap():
@@ -714,12 +685,7 @@ def test_write_ir_colormap():
 
     Temperatures are -70, -40.24, -10, 20.24, 50.
     """
-    from pyninjotiff.ninjotiff import save
-    from pyninjotiff.tifffile import TiffFile
-
-    area = FakeArea({'ellps': 'WGS84', 'lat_0': 90.0, 'lat_ts': 60.0, 'lon_0': 0.0, 'proj': 'stere'},
-                    (-1000000.0, -4500000.0, 2072000.0, -1428000.0),
-                    1024, 1024)
+    area = STEREOGRAPHIC_AREA
     scale = 1.0 / 120
     offset = 70.0 / 120
     attrs = dict([('resolution', 1050),
@@ -787,13 +753,59 @@ def test_write_ir_colormap():
         if not DELETE_FILES:
             print(filename)
         save(img, filename, data_is_scaled_01=True, **kwargs)
-        tif = TiffFile(filename)
-        page = tif[0]
-        res = page.asarray(colormapped=False).squeeze()
-        colormap = page.tags['color_map'].value
+        colormap, res = _load_file_values_with_colormap(filename)
 
         assert(len(colormap) == 768)
         assert(np.allclose(colormap[:256], ir_map))
         assert(np.allclose(colormap[256:512], ir_map))
         assert(np.allclose(colormap[512:], ir_map))
         assert(np.allclose(res[0, ::205], np.array([1,  64, 128, 192, 255])))
+
+
+def test_write_p():
+    """Test saving an image in P mode.
+
+    Values are 0, 1, 2, 3, 4, Palette is black, red, green, blue, gray.
+    """
+    area = STEREOGRAPHIC_AREA
+
+    palette = [np.array((0, 0, 0, 1)),
+               np.array((1, 0, 0, 1)),
+               np.array((0, 1, 0, 1)),
+               np.array((0, 0, 1, 1)),
+               np.array((.5, .5, .5, 1)),
+               ]
+    attrs = dict([('resolution', 1050),
+                  ('polarization', None),
+                  ('platform_name', 'MSG'),
+                  ('sensor', 'seviri'),
+                  ("palette", palette),
+                  ('name', 'msg_cloudtop_height'),
+                  ('level', None),
+                  ('modifiers', ()),
+                  ('start_time', TIME - datetime.timedelta(minutes=85)),
+                  ('end_time', TIME - datetime.timedelta(minutes=80)),
+                  ('area', area),
+                  ('ancillary_variables', [])])
+
+    data = da.tile(da.repeat(da.arange(5, chunks=1024, dtype=np.uint8), 205)[:-1],
+                   1024).reshape((1, 1024, 1024))[:, :1024]
+    data = xr.DataArray(data, coords={'bands': ['P']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
+    kwargs = {'compute': True, 'fill_value': None, 'sat_id': 9000014,
+              'chan_id': 1900015, 'data_cat': 'GPRN', 'data_source': 'SMHI',
+              'physic_unit': 'NONE', "physic_value": "NONE",
+              "description": "NWCSAF Cloud Top Height"}
+
+    img = FakeImage(data)
+    with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
+        filename = tmpfile.name
+        if not DELETE_FILES:
+            print(filename)
+        save(img, filename, data_is_scaled_01=True, **kwargs)
+        colormap, res = _load_file_values_with_colormap(filename)
+
+        np.testing.assert_array_equal(res[0, ::205], [0, 1, 2, 3, 4])
+        assert(len(colormap) == 768)
+        for i, line in enumerate(palette):
+            np.testing.assert_array_equal(colormap[i::256], (line[:3] * 255).astype(int))
