@@ -281,20 +281,8 @@ def test_write_rgb():
     """Test saving a non-trasparent RGB."""
     area = STEREOGRAPHIC_AREA
 
-    x_size, y_size = 1024, 1024
-    arr = np.zeros((3, y_size, x_size))
-    radius = min(x_size, y_size) / 2.0
-    centre = x_size / 2, y_size / 2
-
-    for x in range(x_size):
-        for y in range(y_size):
-            rx = x - centre[0]
-            ry = y - centre[1]
-            s = ((x - centre[0])**2.0 + (y - centre[1])**2.0)**0.5 / radius
-            if s <= 1.0:
-                h = ((np.arctan2(ry, rx) / np.pi) + 1.0) / 2.0
-                rgb = colorsys.hsv_to_rgb(h, s, 1.0)
-                arr[:, y, x] = np.array(rgb)
+    fill_value = 0.0
+    arr = create_hsv_color_disk(fill_value)
 
     attrs = dict([('platform_name', 'NOAA-18'),
                   ('resolution', 1050),
@@ -339,26 +327,30 @@ def test_write_rgb():
                 arr[idx, :, :] * 255).astype(np.uint8))
 
 
-def test_write_rgb_with_a():
-    """Test saving a transparent RGB."""
-    area = STEREOGRAPHIC_AREA
-
+def create_hsv_color_disk(fill_value):
+    """Create an HSV colordisk."""
     x_size, y_size = 1024, 1024
-    arr = np.zeros((3, y_size, x_size))
+    arr = np.full((3, y_size, x_size), fill_value)
     radius = min(x_size, y_size) / 2.0
     centre = x_size / 2, y_size / 2
-
     for x in range(x_size):
         for y in range(y_size):
             rx = x - centre[0]
             ry = y - centre[1]
-            s = ((x - centre[0])**2.0 + (y - centre[1])**2.0)**0.5 / radius
+            s = ((x - centre[0]) ** 2.0 + (y - centre[1]) ** 2.0) ** 0.5 / radius
             if s <= 1.0:
                 h = ((np.arctan2(ry, rx) / np.pi) + 1.0) / 2.0
                 rgb = colorsys.hsv_to_rgb(h, s, 1.0)
                 arr[:, y, x] = np.array(rgb)
-            else:
-                arr[:, y, x] = np.nan
+    return arr
+
+
+def test_write_rgb_with_a():
+    """Test saving a transparent RGB."""
+    area = STEREOGRAPHIC_AREA
+
+    fill_value = np.nan
+    arr = create_hsv_color_disk(fill_value)
 
     attrs = dict([('platform_name', 'NOAA-18'),
                   ('resolution', 1050),
@@ -408,20 +400,8 @@ def test_write_rgb_tb():
     """Test saving a non-trasparent RGB with thumbnails."""
     area = STEREOGRAPHIC_AREA
 
-    x_size, y_size = 1024, 1024
-    arr = np.zeros((3, y_size, x_size))
-    radius = min(x_size, y_size) / 2.0
-    centre = x_size / 2, y_size / 2
-
-    for x in range(x_size):
-        for y in range(y_size):
-            rx = x - centre[0]
-            ry = y - centre[1]
-            s = ((x - centre[0])**2.0 + (y - centre[1])**2.0)**0.5 / radius
-            if s <= 1.0:
-                h = ((np.arctan2(ry, rx) / np.pi) + 1.0) / 2.0
-                rgb = colorsys.hsv_to_rgb(h, s, 1.0)
-                arr[:, y, x] = np.array(rgb)
+    fill_value = 0.0
+    arr = create_hsv_color_disk(fill_value)
 
     attrs = dict([('platform_name', 'NOAA-18'),
                   ('resolution', 1050),
