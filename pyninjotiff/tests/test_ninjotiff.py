@@ -572,6 +572,60 @@ def test_write_rgb_classified():
         np.testing.assert_allclose(res[:, :, 3] == 0, np.isnan(arr[0, :, :]))
 
 
+def test_write_rgba():
+    """Test saving an RGBA image."""
+    area = STEREOGRAPHIC_AREA
+
+    fill_value = np.nan
+    arr = create_hsv_color_disk(fill_value)
+
+    attrs = dict([('platform_name', 'NOAA-18'),
+                  ('resolution', 1050),
+                  ('polarization', None),
+                  ('start_time', TIME - datetime.timedelta(minutes=55)),
+                  ('end_time', TIME - datetime.timedelta(minutes=50)),
+                  ('level', None),
+                  ('sensor', 'avhrr-3'),
+                  ('ancillary_variables', []),
+                  ('area', area),
+                  ('wavelength', None),
+                  ('optional_datasets', []),
+                  ('standard_name', 'overview'),
+                  ('name', 'overview'),
+                  ('prerequisites', [0.6, 0.8, 10.8]),
+                  ('optional_prerequisites', []),
+                  ('calibration', None),
+                  ('modifiers', None),
+                  ('mode', 'RGBA'),
+                  ('enhancement_history', [{'scale': np.array([1,  1, -1]), 'offset': np.array([0, 0, 1])},
+                                           {'scale': np.array([0.0266347, 0.03559078, 0.01329783]),
+                                            'offset': np.array([-0.02524969, -0.01996642,  3.8918446])},
+                                           {'gamma': 1.6}])])
+
+    kwargs = {'compute': True, 'fill_value': None, 'sat_id': 6300014,
+              'chan_id': 6500015, 'data_cat': 'PPRN', 'data_source': 'SMHI', 'nbits': 8}
+    alpha = np.where(np.isnan(arr[0, :, :]), 0, 1)
+    arr = np.nan_to_num(arr)
+    arr = np.vstack((arr, alpha[np.newaxis, :, :]))
+    data = da.from_array(arr.clip(0, 1), chunks=1024)
+
+    data = xr.DataArray(data, coords={'bands': ['R', 'G', 'B', 'A']}, dims=[
+                        'bands', 'y', 'x'], attrs=attrs)
+
+    img = XRImage(data)
+    with tempfile.NamedTemporaryFile(delete=DELETE_FILES) as tmpfile:
+        filename = tmpfile.name
+        if not DELETE_FILES:
+            print(filename)
+        save(img, filename, data_is_scaled_01=True, **kwargs)
+        tif = TiffFile(filename)
+        res = tif[0].asarray()
+        for idx in range(4):
+            np.testing.assert_allclose(res[:, :, idx], np.round(
+                np.nan_to_num(arr[idx, :, :]) * 255).astype(np.uint8))
+        np.testing.assert_allclose(res[:, :, 3] == 0, alpha == 0)
+
+
 def test_write_bw_colormap():
     """Test saving a BW image with a colormap.
 
