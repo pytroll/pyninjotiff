@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "pyninjotiff"
+version = "0.3.0"
+description = "Python Ninjo TIFF writing library"
+authors = ["Martin Raspaud <martin.raspaud@smhi.se>"]
+license = "GPLv3"
+classifiers = [
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering"
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+numpy = ">=1.6"
+pyproj = "^3.2.1"
+pyresample = "^1.21.1"
+dask = {extras = ["array"], version = "^2021.9.1"}
+xarray = "^0.19.0"
+trollimage = "^1.15.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+pytest-cov = "^3.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry-dynamic-versioning]
+enable = true
