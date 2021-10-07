@@ -438,14 +438,18 @@ def _finalize(img, dtype=np.uint8, value_range_measurement_unit=None,
 
     if img.mode == 'RGBA':
         if not isinstance(img, np.ma.MaskedArray):
-            raise NotImplementedError("The 'RGBA' case has not been updated to xarray")
-        channels, fill_value = img._finalize(dtype)
-        fill_value = fill_value or (0, 0, 0, 0)
-        data = np.dstack((channels[0].filled(fill_value[0]),
-                          channels[1].filled(fill_value[1]),
-                          channels[2].filled(fill_value[2]),
-                          channels[3].filled(fill_value[3])))
-        return data, 1.0, 0.0, fill_value[0]
+            data, mode = img.finalize(fill_value=fill_value, dtype=dtype)
+            data = data.transpose('y', 'x', 'bands')
+            fill_value = fill_value or 0
+        else:
+            channels, fill_value = img._finalize(dtype)
+            fill_value = fill_value or (0, 0, 0, 0)
+            data = np.dstack((channels[0].filled(fill_value[0]),
+                              channels[1].filled(fill_value[1]),
+                              channels[2].filled(fill_value[2]),
+                              channels[3].filled(fill_value[3])))
+            fill_value = fill_value[0]
+        return data, 1.0, 0.0, fill_value
 
     if img.mode == 'P':
         if not isinstance(img, np.ma.MaskedArray):
