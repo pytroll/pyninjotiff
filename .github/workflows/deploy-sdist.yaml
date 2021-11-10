@@ -17,5 +17,5 @@ jobs:
         uses: abatilo/actions-poetry@v2.0.0
 
       - name: Build and publish to pypi
-        run: poetry config pypi-token.pypi ${{ secrets.pypi_password }} && poetry config repositories.testpypi https://test.pypi.org/legacy/ && poetry publish --build --repository testpypi
+        run: poetry config pypi-token.pypi ${{ secrets.pypi_password }} && poetry config repositories.testpypi https://test.pypi.org/legacy/ && poetry build -f sdist && poetry publish --repository testpypi
 
