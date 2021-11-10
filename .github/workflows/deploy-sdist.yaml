@@ -13,8 +13,9 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v2
 
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v2.0.0
+
       - name: Build and publish to pypi
-        uses: JRubics/poetry-publish@v1.9
-        with:
-          pypi_token: ${{ secrets.pypi_password }}
-          build_format: "sdist"
+        run: poetry config pypi-token.pypi ${{ secrets.pypi_password }} && poetry config repositories.testpypi https://test.pypi.org/legacy/ && poetry publish --build --repository testpypi
+
