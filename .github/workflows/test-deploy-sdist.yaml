@@ -16,3 +16,4 @@ jobs:
         uses: JRubics/poetry-publish@v1.9
         with:
           pypi_token: ${{ secrets.test_pypi_password }}
+          build_format: "sdist"
