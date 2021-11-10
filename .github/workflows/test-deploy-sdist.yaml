@@ -1,9 +1,8 @@
-name: Deploy sdist
+name: Test deploy sdist
 
 on:
-  release:
-    types:
-      - published
+  - push
+  - pull_request
 
 jobs:
   test:
@@ -16,4 +15,4 @@ jobs:
       - name: Build and publish to pypi
         uses: JRubics/poetry-publish@v1.9
         with:
-          pypi_token: ${{ secrets.pypi_password }}
+          pypi_token: ${{ secrets.test_pypi_password }}
