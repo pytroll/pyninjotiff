@@ -18,14 +18,14 @@ jobs:
       - name: Install Poetry
         uses: abatilo/actions-poetry@v2.0.0
 
-#      - name: Setup poetry repo
-#        run: poetry config repositories.test-pypi https://test.pypi.org/legacy/
+      - name: Setup poetry repo
+        run: poetry config repositories.test https://test.pypi.org/legacy/
 #
 #      - name: Setup token
 #        run: poetry config pypi-token.test-pypi ${{ secrets.test_pypi_password }}
 
       - name: Build and publish
-        run: POETRY_PYPI_TOKEN_TEST=${{ secrets.test_pypi_password }} POETRY_REPOSITORIES_TEST_URL="https://test.pypi.org/legacy/" poetry publish --build --repository test
+        run: poetry publish --build --repository test -u __token__ -p ${{ secrets.test_pypi_password }}
 
 #      - name: Build and publish to pypi
 #        uses: JRubics/poetry-publish@v1.9
