@@ -12,10 +12,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v2
 
-      - name: Install Poetry
-        uses: abatilo/actions-poetry@v2.0.0
+      - name: Install proj
+        run: sudo apt-get install -y proj
 
       - name: Build and publish to pypi
-        run: poetry build -f sdist && poetry publish --repository testpypi
-
-
+        uses: JRubics/poetry-publish@v1.9
+        with:
+          pypi_token: ${{ secrets.test_pypi_password }}
