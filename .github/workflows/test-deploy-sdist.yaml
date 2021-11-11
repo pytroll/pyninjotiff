@@ -16,10 +16,13 @@ jobs:
         run: sudo apt-get install -y proj-bin
 
       - name: Build and publish to pypi
-        uses: JRubics/poetry-publish@v1.9
-        with:
-          pypi_token: ${{ secrets.test_pypi_password }}
-          build_format: "sdist"
-          repository_name: "testpypi"
-          repository_url: "https://test.pypi.org/legacy/"
-          ignore_dev_requirements: "yes"
+        run: poetry config repositories.test-pypi https://test.pypi.org/legacy/ && poetry config pypi-token.test-pypi ${{ secrets.test_pypi_password }} && poetry publish --build --repository test-pypi
+
+#      - name: Build and publish to pypi
+#        uses: JRubics/poetry-publish@v1.9
+#        with:
+#          pypi_token: ${{ secrets.test_pypi_password }}
+#          build_format: "sdist"
+#          repository_name: "testpypi"
+#          repository_url: "https://test.pypi.org/legacy/"
+#          ignore_dev_requirements: "yes"
