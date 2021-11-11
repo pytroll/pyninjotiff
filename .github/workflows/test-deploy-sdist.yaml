@@ -12,26 +12,11 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v2
 
-      - name: Install proj
-        run: sudo apt-get install -y proj-bin
-
       - name: Install Poetry
         uses: abatilo/actions-poetry@v2.0.0
 
-      - name: Setup poetry repo
+      - name: Setup test pypi repo
         run: poetry config repositories.test https://test.pypi.org/legacy/
-#
-#      - name: Setup token
-#        run: poetry config pypi-token.test-pypi ${{ secrets.test_pypi_password }}
 
       - name: Build and publish
         run: poetry publish --build --repository test -u __token__ -p ${{ secrets.test_pypi_password }}
-
-#      - name: Build and publish to pypi
-#        uses: JRubics/poetry-publish@v1.9
-#        with:
-#          pypi_token: ${{ secrets.test_pypi_password }}
-#          build_format: "sdist"
-#          repository_name: "testpypi"
-#          repository_url: "https://test.pypi.org/legacy/"
-#          ignore_dev_requirements: "yes"
