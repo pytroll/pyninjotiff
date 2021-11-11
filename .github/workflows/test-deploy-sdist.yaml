@@ -19,3 +19,5 @@ jobs:
         uses: JRubics/poetry-publish@v1.9
         with:
           pypi_token: ${{ secrets.test_pypi_password }}
+          repository_name: "testpypi"
+          repository_url: "https://test.pypi.org/legacy/"
