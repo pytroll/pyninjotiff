@@ -1,0 +1,21 @@
+name: Test deploy sdist
+
+on:
+  - push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v2.0.0
+
+      - name: Setup test pypi repo
+        run: poetry config repositories.test https://test.pypi.org/legacy/
+
+      - name: Build and publish
+        run: poetry publish --build --repository test -u __token__ -p ${{ secrets.test_pypi_password }}
