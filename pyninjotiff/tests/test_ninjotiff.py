@@ -519,7 +519,10 @@ def test_write_rgb_tb():
         for key, val in tags.items():
             if key in ['datetime', '40002', '40003', '40006']:
                 continue
-            assert(val == read_tags[key].value)
+            if np.asarray(val).dtype.kind == "f":
+                np.testing.assert_allclose(val, read_tags[key].value)
+            else:
+                assert(val == read_tags[key].value)
 
 
 @pytest.mark.skip(reason="this is no implemented yet.")
