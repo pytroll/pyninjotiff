@@ -1,9 +1,10 @@
-[tool.poetry]
+[project]
 name = "pyninjotiff"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Python Ninjo TIFF writing library"
-authors = ["Martin Raspaud <martin.raspaud@smhi.se>"]
-license = "GPLv3"
+authors = [ { name = "Martin Raspaud", email = "martin.raspaud@smhi.se" } ]
+license = { text = "GPLv3" }
+requires-python = ">=3.11"
 classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Development Status :: 5 - Production/Stable",
@@ -13,23 +14,24 @@ classifiers = [
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering"
 ]
+dependencies = [
+    "numpy >=1.6",
+    "pyproj >=3.2.1",
+    "pyresample >=1.21.1",
+    "dask >=2024.9.0",
+    "xarray >=0.19.0",
+    "trollimage >=1.15.1",
+]
 
-[tool.poetry.dependencies]
-python = "^3.7"
-numpy = ">=1.6"
-pyproj = "^3.2.1"
-pyresample = "^1.21.1"
-dask = {extras = ["array"], version = "^2021.9.1"}
-xarray = "^0.19.0"
-trollimage = "^1.15.1"
-
-[tool.poetry.dev-dependencies]
-pytest = "^5.2"
-pytest-cov = "^3.0.0"
+[project.optional-dependencies]
+dev = ['pytest', 'pre-commit', 'pytest-cov']
 
 [build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-[tool.poetry-dynamic-versioning]
-enable = true
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "pyninjotiff/version.py"
