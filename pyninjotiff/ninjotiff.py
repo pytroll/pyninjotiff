@@ -209,7 +209,7 @@ class ProductConfigs(object):
 
     def read_config(self, config_filename=None):
         """Read the ninjo products config file."""
-        from six.moves.configparser import RawConfigParser
+        from configparser import RawConfigParser
         import ast
 
         def _eval(val):
