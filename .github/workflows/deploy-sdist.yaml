@@ -1,3 +1,10 @@
+name: Deploy sdist
+
+on:
+  release:
+    types:
+      - published
+
 jobs:
   test:
     runs-on: ubuntu-latest
