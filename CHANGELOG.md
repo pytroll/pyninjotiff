@@ -29,5 +29,3 @@ In this release 2 pull requests were closed.
 * [PR 30](https://github.com/pytroll/pyninjotiff/pull/30) - Add test deployment to pypi
 
 In this release 2 pull requests were closed.
-
-
