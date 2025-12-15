@@ -1,3 +1,19 @@
+## Version 0.4.3 (2025/12/15)
+
+
+### Pull Requests Merged
+
+#### Bugs fixed
+
+* [PR 36](https://github.com/pytroll/pyninjotiff/pull/36) - Fix compatibility with numpy 2.3
+
+#### Features added
+
+* [PR 34](https://github.com/pytroll/pyninjotiff/pull/34) - remove stray six usage
+
+In this release 2 pull requests were closed.
+
+
 ## Version 0.4.2 (2025/09/03)
 
 
