@@ -1,3 +1,15 @@
+## Version 0.4.4 (2025/12/15)
+
+
+### Pull Requests Merged
+
+#### Bugs fixed
+
+* [PR 37](https://github.com/pytroll/pyninjotiff/pull/37) - Fix sdist and precommit
+
+In this release 1 pull request was closed.
+
+
 ## Version 0.4.3 (2025/12/15)
 
 
