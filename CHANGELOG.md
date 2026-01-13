@@ -1,3 +1,15 @@
+## Version 0.4.5 (2026/01/13)
+
+
+### Pull Requests Merged
+
+#### Features added
+
+* [PR 38](https://github.com/pytroll/pyninjotiff/pull/38) - Fix package building and error on newer numpy versions
+
+In this release 1 pull request was closed.
+
+
 ## Version 0.4.4 (2025/12/15)
 
 
