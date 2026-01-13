@@ -130,6 +130,8 @@ Examples
 
 from __future__ import division, print_function
 
+from contextlib import suppress
+from functools import partial
 import sys
 import os
 import re
@@ -149,7 +151,7 @@ from xml.etree import cElementTree as etree
 import numpy
 
 try:
-    import _tifffile
+    import _tifffile  # noqa
 except ImportError:
     warnings.warn(
         "failed to import the optional _tifffile C extension module.\n"
@@ -541,7 +543,7 @@ class TiffWriter(object):
             tag_byte_counts = TiffWriter.TAGS['strip_byte_counts']
             tag_offsets = TiffWriter.TAGS['strip_offsets']
 
-        def pack(fmt, *val):
+        def pack(fmt: str, *val):
             return struct.pack(byteorder+fmt, *val)
 
         def addtag(code, dtype, count, value, writeonce=False):
@@ -566,6 +568,9 @@ class TiffWriter(object):
             if count == 1:
                 if isinstance(value, (tuple, list)):
                     value = value[0]
+                with suppress(AttributeError):
+                    # NOTE: For numpy array or xarray DataArray with one element
+                    value = value.item()
                 ifdentry.append(pack(val_format, pack(dtype, value)))
             elif struct.calcsize(dtype) * count <= offset_size:
                 ifdentry.append(pack(val_format,
@@ -620,7 +625,7 @@ class TiffWriter(object):
              'rgb': 2,
              'palette': 3}[photometric])
         if photometric == 'palette':
-            if colormap == None:
+            if colormap is None:
                 raise ValueError(
                     "photometric 'palette' specified but colormap missing")
             else:
@@ -1907,7 +1912,7 @@ class TiffPage(object):
             decompress = TIFF_DECOMPESSORS[self.compression]
             if self.compression == 'jpeg':
                 table = self.jpeg_tables if 'jpeg_tables' in self.tags else b''
-                decompress = lambda x: decodejpg(x, table, self.photometric)
+                decompress = partial(decodejpg)(table=table, photometric=self.photometric)
 
             if self.is_tiled:
                 result = numpy.empty(shape, dtype)
@@ -2561,7 +2566,7 @@ class Record(dict):
                 ("* %s: %s" % (k, str(v))).split("\n", 1)[0]
                 [:PRINT_LINE_LEN].rstrip())
         for k, v in lists:
-            l = []
+            l = []  # noqa
             for i, w in enumerate(v):
                 l.append("* %s[%i]\n  %s" % (k, i,
                                              str(w).replace("\n", "\n  ")))
@@ -3183,7 +3188,7 @@ def imagej_metadata(data, bytecounts, byteorder):
     if not bytecounts:
         raise ValueError("no ImageJ metadata")
 
-    if not data[:4] in (b'IJIJ', b'JIJI'):
+    if data[:4] not in (b'IJIJ', b'JIJI'):
         raise ValueError("invalid ImageJ metadata")
 
     header_size = bytecounts[0]
@@ -3424,7 +3429,7 @@ def unpackints(data, dtype, itemsize, runlen=0):
     dtypestr = '>' + dtype.char  # dtype always big endian?
 
     unpack = struct.unpack
-    l = runlen * (len(data)*8 // (runlen*itemsize + skipbits))
+    l = runlen * (len(data)*8 // (runlen*itemsize + skipbits))  # noqa
     result = numpy.empty((l, ), dtype)
     bitcount = 0
     for i in range(len(result)):
@@ -4538,7 +4543,7 @@ TIFF_TAGS = {
     347: ('jpeg_tables', None, 7, None, None),
     530: ('ycbcr_subsampling', 1, 3, 2, None),
     531: ('ycbcr_positioning', 1, 3, 1, None),
-    32996: ('sgi_matteing', None, None, 1, None),  # use extra_samples
+    32995: ('sgi_matteing', None, None, 1, None),  # use extra_samples
     32996: ('sgi_datatype', None, None, 1, None),  # use sample_format
     32997: ('image_depth', None, 4, 1, None),
     32998: ('tile_depth', None, 4, 1, None),
