@@ -15,9 +15,13 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v5
 
+      - name: Install hatch
+        shell: bash -l {0}
+        run: pip install hatch
+
       - name: Create dist packages
         shell: bash -l {0}
-        run: hash build
+        run: hatch build
 
       - name: Publish package to PyPI
         if: github.event.action == 'published'
