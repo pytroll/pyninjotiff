@@ -1,3 +1,15 @@
+## Version 0.5.0 (2026/05/19)
+
+
+### Pull Requests Merged
+
+#### Features added
+
+* [PR 39](https://github.com/pytroll/pyninjotiff/pull/39) - Relicense to Apache v2
+
+In this release 1 pull request was closed.
+
+
 ## Version 0.4.5 (2026/01/13)
 
 
