@@ -1,37 +1,3 @@
-# -*- coding: utf-8 -*-
-# ninjotiff.py
-#
-# Created on Mon Apr 15 13:41:55 2013
-#
-# A big amount of the tiff writer are (PFE) from
-# https://github.com/davidh-ssec/polar2grid by David Hoese
-#
-# License:
-# Copyright (C) 2013 Space Science and Engineering Center (SSEC),
-#  University of Wisconsin-Madison.
-#  Lars Ørum Rasmussen, DMI.
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Original scripts and automation included as part of this package are
-# distributed under the GNU GENERAL PUBLIC LICENSE agreement version 3.
-# Binary executable files included as part of this software package are
-# copyrighted and licensed by their respective organizations, and
-# distributed consistent with their licensing terms.
-#
-# Edited by Christian Kliche (Ernst Basler + Partner) to replace pylibtiff with
-# a modified version of tifffile.py (created by Christoph Gohlke)
 """Ninjotiff writing utility."""
 
 import calendar
