@@ -3,7 +3,8 @@ name = "pyninjotiff"
 dynamic = ["version"]
 description = "Python Ninjo TIFF writing library"
 authors = [ { name = "Martin Raspaud", email = "martin.raspaud@smhi.se" } ]
-license = { text = "GPLv3" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
