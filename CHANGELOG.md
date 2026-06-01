@@ -1,3 +1,20 @@
+## Version 0.5.1 (2026/06/01)
+
+### Issues Closed
+
+* [Issue 40](https://github.com/pytroll/pyninjotiff/issues/40) - Inconsistency in license specification ([PR 41](https://github.com/pytroll/pyninjotiff/pull/41) by [@djhoese](https://github.com/djhoese))
+
+In this release 1 issue was closed.
+
+### Pull Requests Merged
+
+#### Bugs fixed
+
+* [PR 41](https://github.com/pytroll/pyninjotiff/pull/41) - Fix license identifier in pyproject.toml ([40](https://github.com/pytroll/pyninjotiff/issues/40))
+
+In this release 1 pull request was closed.
+
+
 ## Version 0.5.0 (2026/05/19)
 
 
